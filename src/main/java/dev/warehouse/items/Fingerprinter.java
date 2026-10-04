@@ -150,6 +150,29 @@ public final class Fingerprinter {
         }
     }
 
+    /** Canonical JSON of the full (unstripped) component patch, or null if it cannot be encoded. */
+    public static String rawPatchJson(ItemStack stack) {
+        try {
+            DataComponentPatch patch = stack.getComponentsPatch();
+            if (patch.isEmpty()) return "{}";
+            DynamicOps<JsonElement> ops = JsonOps.INSTANCE;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level != null) ops = mc.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+            JsonElement json = DataComponentPatch.CODEC.encodeStart(ops, patch).result().orElse(null);
+            return json == null ? null : canonicalize(json).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static List<String> loreLines(ItemStack stack) {
+        ItemLore lore = stack.get(DataComponents.LORE);
+        List<String> out = new ArrayList<>();
+        if (lore == null) return out;
+        for (Component c : lore.lines()) out.add(c.getString());
+        return out;
+    }
+
     public static String displayName(ItemStack stack) {
         return stack.getHoverName().getString();
     }

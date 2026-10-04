@@ -58,6 +58,8 @@ public final class ModConfig {
     public int visualizationSettleMs = 1000;
 
     // ---- Custom item fingerprinting ----
+    /** Keep a full component sample per custom-item variant in items.json (for tuning the strip lists and planner). */
+    public boolean collectItemSamples = true;
     /** Data component ids stripped before hashing (volatile / noise). */
     public List<String> strippedComponents = new ArrayList<>(Arrays.asList(
             "minecraft:damage",

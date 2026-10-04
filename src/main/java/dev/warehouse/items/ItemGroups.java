@@ -49,13 +49,18 @@ public final class ItemGroups {
         return Optional.empty();
     }
 
+    private static final int MAX_SAMPLES_PER_GROUP = 40;
+
     /** Record a sighting of a stack with a non-vanilla key. Creates/extends the group matching its display name. */
     public ItemGroup record(ItemStack stack, ItemKey key) {
         ensureIndex();
         String name = Fingerprinter.displayName(stack);
         lastDisplayName.put(key, name);
         ItemGroup g = byKey.get(key);
-        if (g != null) return g;
+        if (g != null) {
+            sample(g, stack, key);
+            return g;
+        }
         for (ItemGroup cand : store.get()) {
             if (cand.displayName.equals(name)) {
                 g = cand;
@@ -68,8 +73,33 @@ public final class ItemGroups {
         }
         g.members.add(key);
         byKey.put(key, g);
+        sample(g, stack, key);
         store.markDirty();
         return g;
+    }
+
+    /** Keep one full component sample per fingerprint (capped per group) so variants can be analysed offline. */
+    private void sample(ItemGroup g, ItemStack stack, ItemKey key) {
+        if (!dev.warehouse.config.ConfigIO.get().collectItemSamples) return;
+        if (g.samples == null) g.samples = new java.util.ArrayList<>();
+        for (ItemSample s : g.samples) {
+            if (key.componentHash.equals(s.componentHash)) {
+                s.timesSeen++;
+                return;
+            }
+        }
+        if (g.samples.size() >= MAX_SAMPLES_PER_GROUP) return;
+        ItemSample s = new ItemSample();
+        s.componentHash = key.componentHash;
+        s.itemId = key.itemId;
+        s.displayName = Fingerprinter.displayName(stack);
+        s.componentsJson = Fingerprinter.rawPatchJson(stack);
+        s.lore = Fingerprinter.loreLines(stack);
+        s.count = stack.getCount();
+        s.firstSeenEpochMs = System.currentTimeMillis();
+        s.timesSeen = 1;
+        g.samples.add(s);
+        store.markDirty();
     }
 
     public String displayNameFor(ItemKey key, String fallback) {
