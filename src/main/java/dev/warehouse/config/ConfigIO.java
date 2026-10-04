@@ -10,6 +10,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 
 /** Loads and saves {@link ModConfig} as config/warehouse/config.json. */
 public final class ConfigIO {
@@ -44,8 +45,27 @@ public final class ConfigIO {
         } else {
             config = new ModConfig();
         }
+        migrate(config);
         // Always rewrite so new fields show up with defaults.
         save();
+    }
+
+    /** Apply default additions introduced after the file was first written. */
+    private static void migrate(ModConfig c) {
+        if (c.configVersion < 2) {
+            for (String id : new String[]{"minecraft:container", "minecraft:bundle_contents"}) {
+                if (!c.strippedComponents.contains(id)) c.strippedComponents.add(id);
+            }
+            ModConfig.defaultCategoryColors().forEach((k, v) -> c.categoryColors.putIfAbsent(k, v));
+            if (c.categoryPriorShares == null || c.categoryPriorShares.isEmpty()) c.categoryPriorShares = ModConfig.defaultPriorShares();
+            c.configVersion = 2;
+        }
+        if (c.configVersion < 3) {
+            ModConfig.defaultCategoryColors().forEach((k, v) -> c.categoryColors.putIfAbsent(k, v));
+            if (c.categoryPriorShares == null) c.categoryPriorShares = new LinkedHashMap<>();
+            ModConfig.defaultPriorShares().forEach((k, v) -> c.categoryPriorShares.putIfAbsent(k, v));
+            c.configVersion = 3;
+        }
     }
 
     public static synchronized void save() {

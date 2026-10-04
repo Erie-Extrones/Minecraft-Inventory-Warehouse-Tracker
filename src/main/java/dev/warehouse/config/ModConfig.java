@@ -8,6 +8,9 @@ import java.util.Map;
 
 /** Global, server-independent configuration. Persisted to config/warehouse/config.json. */
 public final class ModConfig {
+    /** Bumped when defaults change so ConfigIO can migrate saved files. */
+    public int configVersion = 3;
+
     /** Item id held in main hand to draw warehouse regions. */
     public String wandItem = "minecraft:dead_brain_coral";
 
@@ -24,6 +27,12 @@ public final class ModConfig {
     public boolean heldItemGuide = true;
     /** Show a Warehouse button on the inventory screen. */
     public boolean inventoryButton = true;
+    /** Lead the player to the current target with a particle trail along a walkable path. */
+    public boolean guideParticles = true;
+    /** Also draw the straight guide line (the old behaviour). */
+    public boolean guideLine = false;
+    /** Particles emitted per trail refresh, caps path length shown (about 2 per block). */
+    public int guideTrailMaxPoints = 90;
 
     /** Tooltip: compact single line vs full lines. */
     public boolean compactTooltip = false;
@@ -65,7 +74,9 @@ public final class ModConfig {
             "minecraft:damage",
             "minecraft:repair_cost",
             "minecraft:enchantment_glint_override",
-            "minecraft:custom_name"
+            "minecraft:custom_name",
+            "minecraft:container",
+            "minecraft:bundle_contents"
     ));
     /** Lore lines matching any of these regexes are removed before hashing. */
     public List<String> strippedLorePatterns = new ArrayList<>(Arrays.asList(
@@ -78,6 +89,12 @@ public final class ModConfig {
     // ---- Organizer ----
     /** Slot headroom multiplier when estimating category volume. */
     public double volumeHeadroom = 1.5;
+    /** Every category gets at least this many chests when the budget allows, even with no known items yet. */
+    public int minChestsPerCategory = 2;
+    /** File shulker boxes by the category of their dominant contents instead of as Storage. */
+    public boolean shulkerByContents = true;
+    /** Suggest a replan after this many containers were opened for the first time since the plan. */
+    public int replanHintAfterNewChests = 25;
     /** Highlight duration in seconds after clicking a search result. */
     public int highlightSeconds = 30;
     /** Minimum stack count filter default for misplaced tab. */
@@ -100,12 +117,52 @@ public final class ModConfig {
     /** Category name -> ARGB color used when previewing plan zones in-world. */
     public Map<String, Integer> categoryColors = defaultCategoryColors();
 
+    /**
+     * Share of not-yet-known chest capacity each category is expected to end up with (relative weights).
+     * Known item volume is added on top, so as the index grows these matter less.
+     */
+    public Map<String, Integer> categoryPriorShares = defaultPriorShares();
+
+    public static Map<String, Integer> defaultPriorShares() {
+        Map<String, Integer> m = new LinkedHashMap<>();
+        m.put("Building Blocks", 14);
+        m.put("Colored Blocks", 8);
+        m.put("Natural", 10);
+        m.put("Wood", 10);
+        m.put("Stone", 10);
+        m.put("Ores & Minerals", 6);
+        m.put("Redstone", 6);
+        m.put("Tools & Weapons", 3);
+        m.put("Armor", 2);
+        m.put("Food", 5);
+        m.put("Farming", 5);
+        m.put("Mob Drops", 5);
+        m.put("Dyes & Decoration", 5);
+        m.put("Potions & Brewing", 3);
+        m.put("Enchanting", 2);
+        m.put("Workstations", 2);
+        m.put("Transport", 2);
+        m.put("Storage", 3);
+        m.put("Keys & Currency", 2);
+        m.put("Infinite Items", 3);
+        m.put("Collectibles", 2);
+        m.put("Custom", 2);
+        m.put("Misc", 5);
+        return m;
+    }
+
     /** Item id or group id -> category. User-defined overrides shared across servers. */
     public Map<String, String> categoryOverrides = new LinkedHashMap<>();
 
     public static Map<String, Integer> defaultCategoryColors() {
         Map<String, Integer> m = new LinkedHashMap<>();
         m.put("Building Blocks", 0xFFB0B0B0);
+        m.put("Colored Blocks", 0xFFFF80C0);
+        m.put("Enchanting", 0xFFB388FF);
+        m.put("Workstations", 0xFFBCAAA4);
+        m.put("Keys & Currency", 0xFFFFE066);
+        m.put("Infinite Items", 0xFF69F0AE);
+        m.put("Collectibles", 0xFFFF9E80);
         m.put("Natural", 0xFF4CAF50);
         m.put("Wood", 0xFF8D6E63);
         m.put("Stone", 0xFF78909C);
@@ -119,6 +176,7 @@ public final class ModConfig {
         m.put("Dyes & Decoration", 0xFFF06292);
         m.put("Potions & Brewing", 0xFF9575CD);
         m.put("Transport", 0xFF26A69A);
+        m.put("Storage", 0xFFD4A373);
         m.put("Custom", 0xFFFFD700);
         m.put("Misc", 0xFF9E9E9E);
         return m;

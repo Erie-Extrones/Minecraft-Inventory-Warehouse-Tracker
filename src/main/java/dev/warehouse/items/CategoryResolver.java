@@ -9,7 +9,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
+import dev.warehouse.index.StackRecord;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -31,6 +33,7 @@ public final class CategoryResolver {
     public void invalidate() {
         cache.clear();
         subFamilyCache.clear();
+        CustomItemClassifier.clearCache();
     }
 
     public String categoryOf(ItemKey key) {
@@ -42,13 +45,39 @@ public final class CategoryResolver {
         return c;
     }
 
+    /** Category honouring shulker contents: a box that is mostly one category files under that category. */
+    public String categoryOf(ItemKey key, @Nullable List<StackRecord> nested) {
+        if (nested == null || nested.isEmpty() || !ConfigIO.get().shulkerByContents) return categoryOf(key);
+        Map<String, Integer> weights = new HashMap<>();
+        int total = 0;
+        for (StackRecord n : nested) {
+            int w = Math.max(1, (int) Math.ceil(n.count / (double) Math.max(1, dev.warehouse.organizer.Allocator.maxStack(n.key))));
+            weights.merge(categoryOf(n.key, n.nested), w, Integer::sum);
+            total += w;
+        }
+        String best = null;
+        int bestW = 0;
+        for (Map.Entry<String, Integer> en : weights.entrySet()) if (en.getValue() > bestW) {
+            best = en.getKey();
+            bestW = en.getValue();
+        }
+        if (best != null && bestW * 2 >= total) return best;
+        return categoryOf(key);
+    }
+
+    public String categoryOf(ItemStack stack) {
+        return categoryOf(Fingerprinter.key(stack), NestedContents.of(stack));
+    }
+
     public String subFamilyOf(ItemKey key) {
         String s = subFamilyCache.get(key);
         if (s == null) {
             ItemStack sample = sampleStack(key);
             s = sample == null ? key.itemId : Categorizer.subFamily(sample);
-            ItemGroup g = groups.groupFor(key);
-            if (g != null) s = g.groupId;
+            if (!key.isVanilla()) {
+                CustomItemClassifier.Result r = CustomItemClassifier.classify(groups.groupFor(key), key, sample == null ? Categorizer.MISC : Categorizer.categorize(sample), s);
+                s = r.family();
+            }
             subFamilyCache.put(key, s);
         }
         return s;
@@ -76,9 +105,8 @@ public final class CategoryResolver {
         ItemStack sample = sampleStack(key);
         String heuristic = sample == null ? Categorizer.MISC : Categorizer.categorize(sample);
         if (!key.isVanilla()) {
-            // Custom gear keeps its functional category so the essentials rules work; everything else is Custom.
-            if (heuristic.equals(Categorizer.TOOLS) || heuristic.equals(Categorizer.ARMOR)) return heuristic;
-            return Categorizer.CUSTOM;
+            String fam = sample == null ? key.itemId : Categorizer.subFamily(sample);
+            return CustomItemClassifier.classify(g, key, heuristic, fam).category();
         }
         return heuristic;
     }

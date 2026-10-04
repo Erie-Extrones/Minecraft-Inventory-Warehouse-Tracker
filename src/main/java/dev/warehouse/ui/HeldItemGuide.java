@@ -31,6 +31,15 @@ public final class HeldItemGuide {
     private int targetColor;
     private int recheckTicks;
 
+    /** Container the guide currently points at, or null. */
+    public @Nullable ContainerEntry target() {
+        return target;
+    }
+
+    public @Nullable ItemKey targetKey() {
+        return target != null ? lastKey : null;
+    }
+
     public void invalidate() {
         lastStack = ItemStack.EMPTY;
         lastKey = null;
@@ -63,7 +72,7 @@ public final class HeldItemGuide {
 
     private void resolve(Minecraft mc, ItemKey key, ItemStack held) {
         target = null;
-        Organizer.Resolution res = WarehouseClient.organizer().resolve(key);
+        Organizer.Resolution res = WarehouseClient.organizer().resolve(held);
         if (res != null) {
             target = res.container();
             targetLabel = "Belongs: " + res.category();
@@ -90,8 +99,7 @@ public final class HeldItemGuide {
             Vec3 c = box.getCenter();
             Gizmos.line(new Vec3(c.x, box.maxY, c.z), new Vec3(c.x, box.maxY + 5, c.z), ARGB.color(150, targetColor), 2.0F).setAlwaysOnTop();
             Gizmos.billboardText(targetLabel, new Vec3(c.x, box.maxY + 0.6, c.z), TextGizmo.Style.forColorAndCentered(targetColor).withScale(0.32F)).setAlwaysOnTop();
-            Vec3 eye = mc.player.getEyePosition().add(0, -0.4, 0);
-            Gizmos.line(eye, c, ARGB.color(190, targetColor), 2.0F).setAlwaysOnTop();
+            WarehouseClient.guidePath().request(box, targetColor, 10);
         } catch (IllegalStateException ignored) {
         }
     }

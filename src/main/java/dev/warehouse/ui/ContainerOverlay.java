@@ -79,7 +79,7 @@ public final class ContainerOverlay {
             if (mode.isActive()) {
                 dest = mode.destinationFor(mc, stack, invSlot); // null when essential or no room
             } else {
-                var res = WarehouseClient.organizer().resolve(Fingerprinter.key(stack));
+                var res = WarehouseClient.organizer().resolve(stack);
                 dest = res != null ? res.container() : null;
             }
             if (dest != null && dest.id.equals(here.id)) out.add(slot);
@@ -102,6 +102,24 @@ public final class ContainerOverlay {
         if (!matching.isEmpty()) {
             int color = ARGB.color((int) (60 + 100 * pulse), 0x40FF80);
             for (Slot slot : matching) g.fill(left + slot.x - 1, top + slot.y - 1, left + slot.x + 17, top + slot.y + 17, color);
+        }
+        // Searched / found / guided item: pulse the container slots that hold it so it can be spotted in a full chest.
+        List<dev.warehouse.items.ItemKey> wanted = new ArrayList<>(WarehouseClient.highlights().itemKeysFor(s.entry.id));
+        var guide = WarehouseClient.heldItemGuide();
+        if (guide.target() != null && guide.target().id.equals(s.entry.id) && guide.targetKey() != null) wanted.add(guide.targetKey());
+        if (!wanted.isEmpty()) {
+            int color = ARGB.color((int) (90 + 110 * pulse), 0xFFD040);
+            for (Slot slot : s.menu.slots) {
+                if (slot.container == mc.player.getInventory() || !slot.hasItem()) continue;
+                dev.warehouse.items.ItemKey k = Fingerprinter.key(slot.getItem());
+                for (dev.warehouse.items.ItemKey w : wanted) {
+                    if (w.equals(k) || (w.isVanilla() && w.itemId.equals(k.itemId))) {
+                        g.fill(left + slot.x - 1, top + slot.y - 1, left + slot.x + 17, top + slot.y + 17, color);
+                        g.outline(left + slot.x - 1, top + slot.y - 1, 18, 18, 0xFFFFE080);
+                        break;
+                    }
+                }
+            }
         }
     }
 

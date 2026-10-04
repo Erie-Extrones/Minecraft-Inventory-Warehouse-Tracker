@@ -17,6 +17,7 @@ import dev.warehouse.inventory.LostLog;
 import dev.warehouse.modes.ClearInventoryMode;
 import dev.warehouse.organizer.Organizer;
 import dev.warehouse.organizer.PlanDiff;
+import dev.warehouse.render.GuidePath;
 import dev.warehouse.render.HighlightRenderer;
 import dev.warehouse.render.PlanPreviewRenderer;
 import dev.warehouse.ui.FindHeldItem;
@@ -66,6 +67,7 @@ public final class WarehouseClient implements ClientModInitializer {
     private dev.warehouse.export.Importer importer;
     private InventoryTracker inventoryTracker;
     private HeldItemGuide heldItemGuide;
+    private GuidePath guidePath;
 
     public static WarehouseClient get() {
         return instance;
@@ -147,6 +149,14 @@ public final class WarehouseClient implements ClientModInitializer {
         return instance.inventoryTracker;
     }
 
+    public static GuidePath guidePath() {
+        return instance.guidePath;
+    }
+
+    public static HeldItemGuide heldItemGuide() {
+        return instance.heldItemGuide;
+    }
+
     @Override
     public void onInitializeClient() {
         instance = this;
@@ -177,6 +187,7 @@ public final class WarehouseClient implements ClientModInitializer {
         importer = new dev.warehouse.export.Importer(storage);
         inventoryTracker = new InventoryTracker();
         heldItemGuide = new HeldItemGuide();
+        guidePath = new GuidePath();
         organizer.onChange(heldItemGuide::invalidate);
         storage.onBind(() -> {
             itemGroups.invalidate();
@@ -247,6 +258,7 @@ public final class WarehouseClient implements ClientModInitializer {
         planPreview.tick(mc);
         clearMode.tick(mc);
         heldItemGuide.tick(mc);
+        guidePath.tick(mc);
         inventoryTracker.tick(mc);
         if (mc.level.getGameTime() % 20 == 0) lostLog.expire();
         storage.tick();

@@ -117,12 +117,17 @@ public final class Organizer {
             return null;
         }
         BlockPos entrance = mc.player.blockPosition();
-        Map<String, Integer> volume = allocator.volumeByCategory(index.all(), inventory(mc));
+        Allocator.Demand demand = allocator.demand(index.all(), inventory(mc));
         List<ContainerEntry> ordered = Allocator.orderChests(chests, regionMap(chests), entrance);
-        Plan p = replan && prev.exists() ? allocator.replan(prev, ordered, volume, entrance) : allocator.build(ordered, volume, prev, entrance);
+        Plan p = replan && prev.exists() ? allocator.replan(prev, ordered, demand, entrance) : allocator.build(ordered, demand, prev, entrance);
         p.accepted = false;
         pending = p;
-        Chat.info(rep.message() + ". Plan: " + p.zones.size() + " zones over " + ordered.size() + " chests. /warehouse plan show, then accept or reject.");
+        int opened = 0;
+        for (ContainerEntry e : ordered) if (e.lastSeenEpochMs > 0) opened++;
+        String hint = opened < ordered.size() / 2
+                ? " Only " + opened + "/" + ordered.size() + " chests have been opened; the plan improves once more are indexed (replan later)."
+                : "";
+        Chat.info(rep.message() + ". Plan: " + p.zones.size() + " zones over " + ordered.size() + " chests." + hint + " /warehouse plan show, then accept or reject.");
         return p;
     }
 
@@ -131,8 +136,24 @@ public final class Organizer {
         pending.accepted = true;
         store.set(pending);
         pending = null;
+        newChestsSincePlan = 0;
+        replanHinted = false;
         invalidate();
         return true;
+    }
+
+    private int newChestsSincePlan;
+    private boolean replanHinted;
+
+    /** Called when a container is indexed for the first time (contents seen). */
+    public void onContainerFirstSeen() {
+        if (!plan().isActive()) return;
+        newChestsSincePlan++;
+        int limit = dev.warehouse.config.ConfigIO.get().replanHintAfterNewChests;
+        if (!replanHinted && limit > 0 && newChestsSincePlan >= limit) {
+            replanHinted = true;
+            Chat.info(newChestsSincePlan + " chests were opened for the first time since the plan. Consider /warehouse plan replan to rebalance zones.");
+        }
     }
 
     public void reject() {
@@ -166,22 +187,35 @@ public final class Organizer {
 
     /** Where should this key live? null when no plan or no room. */
     public @Nullable Resolution resolve(ItemKey key) {
+        return resolve(key, null);
+    }
+
+    /** Resolution for a stack, honouring shulker contents. */
+    public @Nullable Resolution resolve(ItemStack stack) {
+        if (stack.isEmpty()) return null;
+        return resolve(dev.warehouse.items.Fingerprinter.key(stack), dev.warehouse.items.NestedContents.of(stack));
+    }
+
+    public @Nullable Resolution resolve(ItemKey key, @Nullable List<StackRecord> nested) {
         Plan plan = plan();
         if (!plan.isActive()) return null;
-        Resolution cached = resolveCache.get(key);
-        if (cached != null || resolveCache.containsKey(key)) return cached;
-        Resolution r = compute(plan, key);
-        resolveCache.put(key, r);
+        boolean cacheable = nested == null || nested.isEmpty();
+        if (cacheable) {
+            Resolution cached = resolveCache.get(key);
+            if (cached != null || resolveCache.containsKey(key)) return cached;
+        }
+        Resolution r = compute(plan, key, nested);
+        if (cacheable) resolveCache.put(key, r);
         return r;
     }
 
-    private @Nullable Resolution compute(Plan plan, ItemKey key) {
+    private @Nullable Resolution compute(Plan plan, ItemKey key, @Nullable List<StackRecord> nested) {
         UUID ov = plan.explicitOverrides.get(key.asString());
         if (ov != null) {
             ContainerEntry e = index.byId(ov);
-            if (e != null) return new Resolution(e, plan.zoneOf(e.id) != null ? plan.zoneOf(e.id) : categories.categoryOf(key), "override");
+            if (e != null) return new Resolution(e, plan.zoneOf(e.id) != null ? plan.zoneOf(e.id) : categories.categoryOf(key, nested), "override");
         }
-        String cat = categories.categoryOf(key);
+        String cat = categories.categoryOf(key, nested);
         Zone zone = plan.zones.get(cat);
         if (zone == null) zone = plan.zones.get(Categorizer.MISC);
         if (zone == null) return null;
@@ -190,30 +224,29 @@ public final class Organizer {
             ContainerEntry e = index.byId(id);
             if (e != null) chests.add(e);
         }
-        // 1. chest in the zone already holding this key (with room, else still prefer it)
+        if (chests.isEmpty()) return null;
+        // 1. a chest in the zone already holding this exact item, if it has room for more
         ContainerEntry holder = null;
         for (ContainerEntry e : chests) if (e.totalCount(key) > 0) {
             if (e.freeSlots() > 0 || hasPartialStack(e, key)) return new Resolution(e, cat, "already there");
             if (holder == null) holder = e;
         }
-        // 2. chest in the zone holding the same sub-family, with room
+        // 2. the family's home chest, then walk forward from it so related items stay adjacent
         String fam = categories.subFamilyOf(key);
-        ContainerEntry best = null;
-        for (ContainerEntry e : chests) {
-            if (e.freeSlots() <= 0) continue;
-            for (StackRecord s : e.contents) {
-                if (fam.equals(categories.subFamilyOf(s.key))) {
-                    if (best == null || e.freeSlots() > best.freeSlots()) best = e;
-                    break;
-                }
+        int homeIdx = homeIndex(zone, chests, fam);
+        for (int step = 0; step < chests.size(); step++) {
+            ContainerEntry e = chests.get((homeIdx + step) % chests.size());
+            if (e.freeSlots() > 0 && (step == 0 || holdsFamily(e, fam) || isEmptyOrSameFamilyOnly(e, fam))) {
+                return new Resolution(e, cat, step == 0 ? "family home" : "near family home");
             }
         }
-        if (best != null) return new Resolution(best, cat, "same family");
-        // 3. chest in the zone with most free slots
-        for (ContainerEntry e : chests) if (e.freeSlots() > 0 && (best == null || e.freeSlots() > best.freeSlots())) best = e;
-        if (best != null) return new Resolution(best, cat, "free space");
+        // 3. any chest in the zone with room, nearest the home in walk order
+        for (int step = 0; step < chests.size(); step++) {
+            ContainerEntry e = chests.get((homeIdx + step) % chests.size());
+            if (e.freeSlots() > 0) return new Resolution(e, cat, "free space");
+        }
         if (holder != null) return new Resolution(holder, cat, "already there (full)");
-        // 4. nearest Misc chest with room
+        // 4. Misc overflow
         Zone misc = plan.zones.get(Categorizer.MISC);
         if (misc != null && misc != zone) {
             for (UUID id : misc.containerIds) {
@@ -222,6 +255,28 @@ public final class Organizer {
             }
         }
         return null;
+    }
+
+    private int homeIndex(Zone zone, List<ContainerEntry> chests, String family) {
+        UUID home = zone.familyHomes != null ? zone.familyHomes.get(family) : null;
+        if (home != null) {
+            for (int i = 0; i < chests.size(); i++) if (chests.get(i).id.equals(home)) return i;
+        }
+        // Unknown family: a stable slot in the zone, biased toward the second half so planned families keep the front.
+        int n = chests.size();
+        int h = Math.floorMod(family.hashCode(), Math.max(1, n));
+        return n > 2 ? (n / 2 + h / 2) % n : h;
+    }
+
+    private boolean holdsFamily(ContainerEntry e, String fam) {
+        for (StackRecord s : e.contents) if (fam.equals(categories.subFamilyOf(s.key))) return true;
+        return false;
+    }
+
+    /** True if the chest is empty or every stack in it belongs to the given family. */
+    private boolean isEmptyOrSameFamilyOnly(ContainerEntry e, String fam) {
+        for (StackRecord s : e.contents) if (!fam.equals(categories.subFamilyOf(s.key))) return false;
+        return true;
     }
 
     private static boolean hasPartialStack(ContainerEntry e, ItemKey key) {

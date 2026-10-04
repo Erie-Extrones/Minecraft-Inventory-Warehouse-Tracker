@@ -57,7 +57,7 @@ public final class PlanDiff {
                 if (zone == null) continue;
                 if (e.lastSeenEpochMs < plan.createdEpochMs) unopened++;
                 for (StackRecord s : e.contents) {
-                    Organizer.Resolution res = organizer.resolve(s.key);
+                    Organizer.Resolution res = organizer.resolve(s.key, s.nested);
                     if (res == null) continue;
                     String destZone = plan.zoneOf(res.container().id);
                     if (destZone == null || destZone.equals(zone)) continue; // same-zone overflow is not misplaced
