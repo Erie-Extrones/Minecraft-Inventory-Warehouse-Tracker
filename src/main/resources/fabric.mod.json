@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "warehouse",
+  "version": "${version}",
+  "name": "Warehouse",
+  "description": "Client-side warehouse inventory tracker: regions, container indexing, search, organizer and lost-item log.",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/warehouse/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.warehouse.WarehouseClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "warehouse.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
