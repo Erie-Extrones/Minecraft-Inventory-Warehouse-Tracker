@@ -19,7 +19,9 @@ Install the jar and Fabric API in your `mods` folder. The mod never loads on a d
 2. **Draw a region.** Hold the wand and right-click one corner of your storage area, then the opposite corner. Sneak-right-click cancels. Rename it with `/warehouse region rename "Warehouse 1" Main Base`.
 3. **Open chests.** Any chest, barrel, shulker box or ender chest you open inside a region is indexed. Armor stands and item frames inside regions are indexed automatically. Chests outside a region are ignored unless you pin them with the small **W** button at the top right of the chest screen.
 4. **Hover an item.** The tooltip shows where it is stored and, once a plan exists, where it belongs.
-5. **Search.** Bind the *Open warehouse search* key in Controls (unbound by default) or run `/warehouse search`. Click a result to highlight that chest in the world for 30 seconds.
+5. **Hold an item inside the region.** The chest it belongs in stays highlighted with a guide line for as long as you hold it and stand inside a Warehouse region. With an accepted plan this is the planned destination; without one it is where the item is currently stored. Turn it off with `/warehouse guide off`.
+6. **Find anything.** `/warehouse find` (or the *Find held item* key) highlights where the item in your hand is stored, from anywhere. `/warehouse find all` lights every chest holding it.
+7. **Search.** Press the **Warehouse** button above your inventory, bind the *Open warehouse search* key in Controls (unbound by default), or run `/warehouse search`. Click a result to highlight that chest in the world for 30 seconds.
 
 ## GriefPrevention claims
 
@@ -69,6 +71,8 @@ Server items with special components are identified by item id plus a fingerprin
 /warehouse region list | rename <old> <new> | delete <name> | outlines [on|off] | cancel
 /warehouse wand [item]
 /warehouse claims import | reimport | list | clear
+/warehouse find [all]
+/warehouse guide [on|off]
 /warehouse search [query]      /warehouse misplaced      /warehouse lost      /warehouse unsorted
 /warehouse plan run | replan | accept | reject | show | clear | count <n> | preview [on|off]
 /warehouse plan override here | clear
@@ -88,13 +92,14 @@ Server items with special components are identified by item id plus a fingerprin
 |---|---|
 | Toggle region outlines | O |
 | Open warehouse search | unbound |
+| Find held item | unbound |
 | Toggle clear-inventory mode | unbound |
 
 ## Files
 
 ```
 config/warehouse/
-  config.json              global settings: wand, colors, essentials rules, strip lists, category colors
+  config.json              global settings: wand, colors, held-item guide, inventory button, essentials rules, strip lists
   <server-key>/            one folder per server address, or sp-<world> for singleplayer
     regions.json  claims.json  index.json  items.json  plan.json  lost.json
   exports/                 export bundles

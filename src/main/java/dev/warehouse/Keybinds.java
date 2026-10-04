@@ -11,12 +11,14 @@ public final class Keybinds {
     public static KeyMapping toggleOutlines;
     public static KeyMapping openSearch;
     public static KeyMapping clearInventoryMode;
+    public static KeyMapping findHeldItem;
 
     private Keybinds() {}
 
     public static void register() {
         toggleOutlines = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.warehouse.toggle_outlines", InputConstants.Type.KEYBOARD, InputConstants.KEY_O, CATEGORY));
         openSearch = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.warehouse.open_search", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), CATEGORY));
+        findHeldItem = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.warehouse.find_held_item", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), CATEGORY));
         clearInventoryMode = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.warehouse.clear_inventory_mode", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), CATEGORY));
     }
 }
