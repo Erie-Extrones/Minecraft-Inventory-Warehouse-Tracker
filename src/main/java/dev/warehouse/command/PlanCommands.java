@@ -11,6 +11,7 @@ import dev.warehouse.items.Fingerprinter;
 import dev.warehouse.items.ItemKey;
 import dev.warehouse.organizer.Organizer;
 import dev.warehouse.organizer.Plan;
+import dev.warehouse.ui.FindHeldItem;
 import dev.warehouse.ui.SearchScreen;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.ChatFormatting;
@@ -107,11 +108,31 @@ public final class PlanCommands {
             WarehouseClient.clearMode().toggle(c.getSource().getClient());
             return 1;
         }));
+        root.then(literal("find")
+                .executes(c -> {
+                    FindHeldItem.run(c.getSource().getClient(), false);
+                    return 1;
+                })
+                .then(literal("all").executes(c -> {
+                    FindHeldItem.run(c.getSource().getClient(), true);
+                    return 1;
+                })));
+        root.then(literal("guide")
+                .executes(c -> guide(!dev.warehouse.config.ConfigIO.get().heldItemGuide))
+                .then(literal("on").executes(c -> guide(true)))
+                .then(literal("off").executes(c -> guide(false))));
         root.then(literal("highlight")
                 .then(literal("clear").executes(c -> {
                     WarehouseClient.highlights().clear();
                     return 1;
                 })));
+    }
+
+    private static int guide(boolean on) {
+        dev.warehouse.config.ConfigIO.get().heldItemGuide = on;
+        dev.warehouse.config.ConfigIO.save();
+        Chat.info("Held-item guide " + (on ? "on" : "off") + ".");
+        return 1;
     }
 
     private static int openTab(Minecraft mc, SearchScreen.Tab t) {

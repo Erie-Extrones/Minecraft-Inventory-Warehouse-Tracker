@@ -20,6 +20,11 @@ public final class ModConfig {
     public int pendingSelectionColor = 0xFFFFD040;
     public int highlightColor = 0xFFFF4080;
 
+    /** While standing in a Warehouse region holding an item, keep its destination chest highlighted. */
+    public boolean heldItemGuide = true;
+    /** Show a Warehouse button on the inventory screen. */
+    public boolean inventoryButton = true;
+
     /** Tooltip: compact single line vs full lines. */
     public boolean compactTooltip = false;
     public boolean showTooltip = true;
