@@ -79,6 +79,17 @@ public final class ExtraCommands {
                     Chat.info("Stored: " + WarehouseClient.index().totalCount(key) + " across " + WarehouseClient.index().holding(key).size() + " container(s)");
                     return 1;
                 }))
+                .then(literal("samples").executes(c -> {
+                    int groups = 0, samples = 0;
+                    for (ItemGroup g : WarehouseClient.itemGroups().all()) {
+                        if (g.samples != null && !g.samples.isEmpty()) {
+                            groups++;
+                            samples += g.samples.size();
+                        }
+                    }
+                    Chat.info(samples + " component sample(s) across " + groups + " custom item group(s); included in /warehouse export.");
+                    return 1;
+                }))
                 .then(literal("inventory").executes(c -> {
                     Chat.info("Unexplained inventory loss events this session: " + WarehouseClient.inventoryTracker().unexplainedLossEvents());
                     Chat.info("Lost log entries: " + WarehouseClient.lostLog().entries().size());

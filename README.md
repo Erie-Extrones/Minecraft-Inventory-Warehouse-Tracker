@@ -52,7 +52,7 @@ Dropping an item (Q, ctrl-Q, throwing out of a GUI, or clicking outside a window
 
 ## Custom items
 
-Server items with special components are identified by item id plus a fingerprint of their data components, grouped by display name. Volatile components (damage, repair cost, custom name) and lore lines that look like durability or ownership are stripped before hashing so one item type does not split into many groups. Adjust the lists in the config if your server's items still split. Manage groups with:
+Server items with special components are identified by item id plus a fingerprint of their data components, grouped by display name. For every variant it meets, the mod also keeps one full sample of the item's components and lore in `items.json` (capped at 40 per group), so group splits and planner mistakes can be diagnosed from an export. Set `collectItemSamples` to `false` in the config to turn that off. Volatile components (damage, repair cost, custom name) and lore lines that look like durability or ownership are stripped before hashing so one item type does not split into many groups. Adjust the lists in the config if your server's items still split. Manage groups with:
 
 ```
 /warehouse items list

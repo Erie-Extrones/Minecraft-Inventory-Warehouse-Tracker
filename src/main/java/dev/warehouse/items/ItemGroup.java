@@ -11,6 +11,8 @@ public final class ItemGroup {
     public List<ItemKey> members = new ArrayList<>();
     public String categoryOverride;
     public long firstSeenEpochMs;
+    /** Full component samples per fingerprint, for analysing how variants differ. Capped. */
+    public List<ItemSample> samples = new ArrayList<>();
 
     public ItemGroup() {}
 
