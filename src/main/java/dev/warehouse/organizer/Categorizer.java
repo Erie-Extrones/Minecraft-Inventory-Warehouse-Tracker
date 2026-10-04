@@ -49,7 +49,7 @@ public final class Categorizer {
         if (stack.has(DataComponents.TOOL) || stack.is(ItemTags.PICKAXES) || stack.is(ItemTags.SHOVELS) || stack.is(ItemTags.HOES) || path.equals("shears") || path.equals("flint_and_steel") || path.equals("fishing_rod") || path.equals("brush") || path.equals("spyglass") || path.endsWith("compass") || path.equals("clock") || path.equals("lead") || path.equals("name_tag") || path.equals("elytra") || path.equals("totem_of_undying"))
             return TOOLS;
         if (path.equals("arrow") || path.endsWith("_arrow") || path.equals("firework_rocket")) return TOOLS;
-        if (path.contains("potion") || path.equals("brewing_stand") || path.equals("blaze_powder") || path.equals("nether_wart") || path.equals("fermented_spider_eye") || path.equals("glistering_melon_slice") || path.equals("golden_carrot") && false || path.equals("dragon_breath") || path.equals("phantom_membrane") || path.equals("ghast_tear") || path.equals("magma_cream") || path.equals("glass_bottle") || path.equals("experience_bottle") || path.equals("cauldron") || path.equals("rabbit_foot") || path.equals("turtle_scute") || path.equals("ominous_bottle") || path.equals("breeze_rod") || path.equals("wind_charge"))
+        if (path.contains("potion") || path.equals("brewing_stand") || path.equals("blaze_powder") || path.equals("nether_wart") || path.equals("fermented_spider_eye") || path.equals("glistering_melon_slice") || path.equals("dragon_breath") || path.equals("phantom_membrane") || path.equals("ghast_tear") || path.equals("magma_cream") || path.equals("glass_bottle") || path.equals("experience_bottle") || path.equals("cauldron") || path.equals("rabbit_foot") || path.equals("turtle_scute") || path.equals("ominous_bottle") || path.equals("breeze_rod") || path.equals("wind_charge"))
             return POTIONS;
         if (stack.has(DataComponents.FOOD) || stack.has(DataComponents.CONSUMABLE) && !path.contains("potion") && !path.equals("milk_bucket") && !path.contains("bottle")) return FOOD;
         if (path.equals("milk_bucket") || path.equals("cake") || path.equals("sugar") || path.equals("egg") || path.endsWith("_egg") && !path.contains("spawn")) return FOOD;
@@ -70,7 +70,7 @@ public final class Categorizer {
         if (stack.getItem() instanceof BlockItem bi) {
             Block block = bi.getBlock();
             BlockState st = block.defaultBlockState();
-            if (st.is(BlockTags.LEAVES) || st.is(BlockTags.FLOWERS) || st.is(BlockTags.SAPLINGS) || st.is(BlockTags.DIRT) || st.is(BlockTags.SAND) || st.is(BlockTags.ICE) || st.is(BlockTags.SNOW) || st.is(BlockTags.CORALS) || path.equals("grass_block") || path.equals("gravel") || path.equals("clay") || path.contains("moss") || path.contains("vine") || path.contains("grass") || path.contains("fern") || path.contains("lily") || path.contains("bush") || path.equals("obsidian") || path.equals("crying_obsidian") || path.equals("netherrack") || path.equals("soul_sand") || path.equals("soul_soil") || path.equals("magma_block") || path.contains("nylium") || path.contains("shroomlight") || path.contains("fungus") || path.contains("roots") || path.contains("sponge") || path.contains("coral") || path.contains("mud") && !path.contains("brick") || path.contains("dripleaf") || path.contains("azalea") || path.contains("sculk") || path.equals("glowstone") || path.equals("sea_lantern") && false || path.contains("snow") || path.contains("ice") || path.contains("spore") || path.contains("pumpkin") || path.contains("melon") || path.contains("leaf") || path.contains("flower"))
+            if (st.is(BlockTags.LEAVES) || st.is(BlockTags.FLOWERS) || st.is(BlockTags.SAPLINGS) || st.is(BlockTags.DIRT) || st.is(BlockTags.SAND) || st.is(BlockTags.ICE) || st.is(BlockTags.SNOW) || st.is(BlockTags.CORALS) || path.equals("grass_block") || path.equals("gravel") || path.equals("clay") || path.contains("moss") || path.contains("vine") || path.contains("grass") || path.contains("fern") || path.contains("lily") || path.contains("bush") || path.equals("obsidian") || path.equals("crying_obsidian") || path.equals("netherrack") || path.equals("soul_sand") || path.equals("soul_soil") || path.equals("magma_block") || path.contains("nylium") || path.contains("shroomlight") || path.contains("fungus") || path.contains("roots") || path.contains("sponge") || path.contains("coral") || path.contains("mud") && !path.contains("brick") || path.contains("dripleaf") || path.contains("azalea") || path.contains("sculk") || path.equals("glowstone") || path.contains("snow") || path.contains("ice") || path.contains("spore") || path.contains("pumpkin") || path.contains("melon") || path.contains("leaf") || path.contains("flower"))
                 return NATURAL;
             if (st.is(BlockTags.BASE_STONE_OVERWORLD) || st.is(BlockTags.BASE_STONE_NETHER) || st.is(BlockTags.STONE_BRICKS) || stack.is(ItemTags.STONE_BRICKS) || stack.is(ItemTags.STONE_CRAFTING_MATERIALS) || isStoneVariant(path))
                 return STONE;
@@ -97,12 +97,12 @@ public final class Categorizer {
     }
 
     private static boolean isMineralBlock(String path) {
-        return path.startsWith("raw_") || path.equals("amethyst_block") || path.equals("budding_amethyst") || path.equals("quartz_block") && false;
+        return path.startsWith("raw_") || path.equals("amethyst_block") || path.equals("budding_amethyst");
     }
 
     private static boolean isStoneVariant(String path) {
         for (String s : STONE_TYPES) if (path.equals(s) || path.startsWith(s + "_") || path.startsWith("polished_" + s) || path.startsWith("mossy_" + s) || path.startsWith("cracked_" + s) || path.startsWith("chiseled_" + s) || path.startsWith("smooth_" + s) || path.startsWith("cut_" + s) || path.equals("cobbled_" + s)) return true;
-        return path.equals("cobbled_deepslate") || path.equals("mossy_cobblestone") || path.equals("end_stone") || path.equals("netherrack") && false;
+        return path.equals("cobbled_deepslate") || path.equals("mossy_cobblestone") || path.equals("end_stone");
     }
 
     private static boolean isMobDrop(String path) {
@@ -113,7 +113,7 @@ public final class Categorizer {
                  "armadillo_scute", "turtle_scute", "echo_shard", "ghast_tear", "magma_cream", "dragon_egg", "wind_charge", "breeze_rod", "trial_key",
                  "ominous_trial_key", "heavy_core", "sniffer_egg", "turtle_egg", "frogspawn", "resin_clump", "wolf_armor", "cod", "salmon", "tropical_fish",
                  "pufferfish", "goat_horn" -> true;
-            default -> path.endsWith("_tear") || path.endsWith("_shell") || path.endsWith("_hide") || path.endsWith("_wool") && false;
+            default -> path.endsWith("_tear") || path.endsWith("_shell") || path.endsWith("_hide");
         };
     }
 }

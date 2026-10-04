@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import dev.warehouse.items.Fingerprinter;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -63,7 +65,7 @@ public final class ContainerOverlay {
         return out;
     }
 
-    /** Menu slots (player inventory) whose stack resolves to this container. */
+    /** Menu slots (player inventory) whose stack belongs in this container: clear-mode destination, or plan resolution. */
     private static List<Slot> matchingInventorySlots(Minecraft mc, ScreenTracker.Session s) {
         List<Slot> out = new ArrayList<>();
         if (mc.player == null || s.entry == null) return out;
@@ -71,15 +73,15 @@ public final class ContainerOverlay {
         ClearInventoryMode mode = WarehouseClient.clearMode();
         for (Slot slot : s.menu.slots) {
             if (slot.container != mc.player.getInventory() || !slot.hasItem()) continue;
-            if (mode.destinationFor(mc, slot.getItem(), slot.getContainerSlot()) == null) {
-                // Not in clear mode (or essential): still offer deposit when the plan says this chest.
-                var res = WarehouseClient.organizer().resolve(dev.warehouse.items.Fingerprinter.key(slot.getItem()));
-                if (res == null || !res.container().id.equals(here.id)) continue;
-                if (mode.isActive() && mode.isEssential(mc, slot.getItem(), slot.getContainerSlot())) continue;
-                out.add(slot);
-                continue;
+            ItemStack stack = slot.getItem();
+            int invSlot = slot.getContainerSlot();
+            ContainerEntry dest;
+            if (mode.isActive()) {
+                dest = mode.destinationFor(mc, stack, invSlot); // null when essential or no room
+            } else {
+                var res = WarehouseClient.organizer().resolve(Fingerprinter.key(stack));
+                dest = res != null ? res.container() : null;
             }
-            var dest = mode.destinationFor(mc, slot.getItem(), slot.getContainerSlot());
             if (dest != null && dest.id.equals(here.id)) out.add(slot);
         }
         return out;
