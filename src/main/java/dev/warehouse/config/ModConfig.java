@@ -9,7 +9,7 @@ import java.util.Map;
 /** Global, server-independent configuration. Persisted to config/warehouse/config.json. */
 public final class ModConfig {
     /** Bumped when defaults change so ConfigIO can migrate saved files. */
-    public int configVersion = 2;
+    public int configVersion = 3;
 
     /** Item id held in main hand to draw warehouse regions. */
     public String wandItem = "minecraft:dead_brain_coral";
@@ -125,7 +125,8 @@ public final class ModConfig {
 
     public static Map<String, Integer> defaultPriorShares() {
         Map<String, Integer> m = new LinkedHashMap<>();
-        m.put("Building Blocks", 20);
+        m.put("Building Blocks", 14);
+        m.put("Colored Blocks", 8);
         m.put("Natural", 10);
         m.put("Wood", 10);
         m.put("Stone", 10);
@@ -136,12 +137,17 @@ public final class ModConfig {
         m.put("Food", 5);
         m.put("Farming", 5);
         m.put("Mob Drops", 5);
-        m.put("Dyes & Decoration", 8);
+        m.put("Dyes & Decoration", 5);
         m.put("Potions & Brewing", 3);
+        m.put("Enchanting", 2);
+        m.put("Workstations", 2);
         m.put("Transport", 2);
         m.put("Storage", 3);
-        m.put("Custom", 4);
-        m.put("Misc", 6);
+        m.put("Keys & Currency", 2);
+        m.put("Infinite Items", 3);
+        m.put("Collectibles", 2);
+        m.put("Custom", 2);
+        m.put("Misc", 5);
         return m;
     }
 
@@ -151,6 +157,12 @@ public final class ModConfig {
     public static Map<String, Integer> defaultCategoryColors() {
         Map<String, Integer> m = new LinkedHashMap<>();
         m.put("Building Blocks", 0xFFB0B0B0);
+        m.put("Colored Blocks", 0xFFFF80C0);
+        m.put("Enchanting", 0xFFB388FF);
+        m.put("Workstations", 0xFFBCAAA4);
+        m.put("Keys & Currency", 0xFFFFE066);
+        m.put("Infinite Items", 0xFF69F0AE);
+        m.put("Collectibles", 0xFFFF9E80);
         m.put("Natural", 0xFF4CAF50);
         m.put("Wood", 0xFF8D6E63);
         m.put("Stone", 0xFF78909C);

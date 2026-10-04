@@ -31,6 +31,15 @@ public final class HeldItemGuide {
     private int targetColor;
     private int recheckTicks;
 
+    /** Container the guide currently points at, or null. */
+    public @Nullable ContainerEntry target() {
+        return target;
+    }
+
+    public @Nullable ItemKey targetKey() {
+        return target != null ? lastKey : null;
+    }
+
     public void invalidate() {
         lastStack = ItemStack.EMPTY;
         lastKey = null;

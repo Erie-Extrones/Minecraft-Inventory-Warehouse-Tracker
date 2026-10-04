@@ -37,6 +37,7 @@ After accepting:
 
 - Tooltips say **Belongs in** for every item, even ones you have never stored.
 - The **Misplaced** tab lists stacks sitting in a chest whose zone does not match. Click one to highlight both chests with an arrow between them. Opening the source chest pulses the misplaced slots and shows a **Take misplaced** button; highlights update live as you move items.
+- When you open a chest you reached through search, find or the held-item guide, the slots holding that item pulse gold so you can spot it in a full chest.
 - **Sort route** (button on the Misplaced tab, or `/warehouse sort`) walks you through the fix: chests with misplaced items and the destinations for whatever you are carrying are ordered into a short tour, numbered in the world, with a particle trail to the next stop. When your inventory is nearly full it steers you to drop-offs first.
 - `/warehouse plan replan` keeps zone assignments that still fit and only moves new chests or overflowing categories.
 - `/warehouse plan override here` pins the item in your hand to the chest you are looking at. `/warehouse plan category <item or group> <category>` changes a category for this server.
@@ -55,7 +56,16 @@ Dropping an item (Q, ctrl-Q, throwing out of a GUI, or clicking outside a window
 
 ## Custom items
 
-Server items with special components are identified by item id plus a fingerprint of their data components (shulker and bundle contents excluded), grouped by display name. Chest-style plugin menus (crates, editors, shops) are detected and skipped so their buttons do not end up in the index. For every variant it meets, the mod also keeps one full sample of the item's components and lore in `items.json` (capped at 40 per group), so group splits and planner mistakes can be diagnosed from an export. Set `collectItemSamples` to `false` in the config to turn that off. Volatile components (damage, repair cost, custom name) and lore lines that look like durability or ownership are stripped before hashing so one item type does not split into many groups. Adjust the lists in the config if your server's items still split. Manage groups with:
+Server items with special components are identified by item id plus a fingerprint of their data components (shulker and bundle contents excluded), grouped by display name. The planner then looks at the components it sampled to decide what the item really is:
+
+- Vanilla variants (enchanted books, potions, tipped arrows, dyed leather, fireworks, written books) keep the category of their base item.
+- Plugin gear (attribute modifiers, custom equippable or enchanted tools) stays in Tools & Weapons or Armor.
+- Crate keys, vouchers, tokens and anything whose lore says it is currency go to **Keys & Currency**.
+- "Infinite" or "unlimited" placeable blocks go to **Infinite Items**, grouped by colour.
+- Plushies, pendants, hats, crates, satchels and similar go to **Collectibles**, grouped by the plugin pack they came from.
+- Anything else from a plugin lands in **Custom**, also grouped by pack, so one event's items share a chest.
+
+Plugin markers recognised: ExecutableItems (`ei-id`), ExcellentCrates (`crate_key.id`), ItemsAdder and MMOItems custom data, plus `custom_model_data` / `item_model`. Chest-style plugin menus (crates, editors, shops) are detected and skipped so their buttons do not end up in the index. For every variant it meets, the mod also keeps one full sample of the item's components and lore in `items.json` (capped at 40 per group), so group splits and planner mistakes can be diagnosed from an export. Set `collectItemSamples` to `false` in the config to turn that off. Volatile components (damage, repair cost, custom name) and lore lines that look like durability or ownership are stripped before hashing so one item type does not split into many groups. Adjust the lists in the config if your server's items still split. Manage groups with:
 
 ```
 /warehouse items list
@@ -122,7 +132,7 @@ Needs JDK 25. The jar lands in `build/libs/`.
 
 ## Categories
 
-Building Blocks, Natural, Wood, Stone, Ores & Minerals, Redstone, Tools & Weapons, Armor, Food, Farming, Mob Drops, Dyes & Decoration, Potions & Brewing, Transport, Storage, Custom, Misc.
+Building Blocks, Colored Blocks (wool, carpet, concrete, terracotta, glass), Natural, Wood, Stone, Ores & Minerals, Redstone, Tools & Weapons, Armor, Food, Farming, Mob Drops, Dyes & Decoration, Potions & Brewing, Enchanting, Workstations, Transport, Storage, Keys & Currency, Infinite Items, Collectibles, Custom, Misc.
 
 `categoryPriorShares` in the config sets how unexplored capacity is split between them; `guideParticles` / `guideLine` choose how you are led to a chest.
 

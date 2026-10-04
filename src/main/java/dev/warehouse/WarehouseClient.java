@@ -153,6 +153,10 @@ public final class WarehouseClient implements ClientModInitializer {
         return instance.guidePath;
     }
 
+    public static HeldItemGuide heldItemGuide() {
+        return instance.heldItemGuide;
+    }
+
     @Override
     public void onInitializeClient() {
         instance = this;

@@ -32,6 +32,9 @@ public final class HighlightRenderer {
         public final boolean lineFromPlayer;
         public @Nullable Highlight linkedTo;
         public final @Nullable String group;
+        /** Item this highlight is about (search / find), so the chest screen can pulse its slots. */
+        public dev.warehouse.items.@Nullable ItemKey itemKey;
+        public java.util.@Nullable UUID containerId;
 
         Highlight(String dimension, @Nullable AABB box, @Nullable UUID entityId, @Nullable BlockPos fallbackPos, int color, long expiresAtMs, @Nullable String label, boolean lineFromPlayer, @Nullable String group) {
             this.dimension = dimension;
@@ -83,8 +86,24 @@ public final class HighlightRenderer {
             box = e.secondaryPos != null ? AABB.encapsulatingFullBlocks(e.pos, e.secondaryPos) : new AABB(e.pos);
         }
         Highlight h = new Highlight(e.dimension, box, e.kind.isEntity() ? e.entityId : null, e.pos, color, System.currentTimeMillis() + seconds * 1000L, label, line, group);
+        h.containerId = e.id;
         active.add(h);
         return h;
+    }
+
+    /** Highlight a container because of a specific item; the chest screen will pulse that item's slots. */
+    public Highlight containerForItem(ContainerEntry e, dev.warehouse.items.ItemKey key, int color, int seconds, @Nullable String label, boolean line, @Nullable String group) {
+        Highlight h = container(e, color, seconds, label, line, group);
+        h.itemKey = key;
+        return h;
+    }
+
+    /** Keys of active highlights that point at this container. */
+    public List<dev.warehouse.items.ItemKey> itemKeysFor(UUID containerId) {
+        List<dev.warehouse.items.ItemKey> out = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (Highlight h : active) if (h.itemKey != null && containerId.equals(h.containerId) && now <= h.expiresAtMs) out.add(h.itemKey);
+        return out;
     }
 
     public Highlight container(ContainerEntry e, @Nullable String label) {

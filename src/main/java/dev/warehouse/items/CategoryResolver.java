@@ -33,6 +33,7 @@ public final class CategoryResolver {
     public void invalidate() {
         cache.clear();
         subFamilyCache.clear();
+        CustomItemClassifier.clearCache();
     }
 
     public String categoryOf(ItemKey key) {
@@ -73,8 +74,10 @@ public final class CategoryResolver {
         if (s == null) {
             ItemStack sample = sampleStack(key);
             s = sample == null ? key.itemId : Categorizer.subFamily(sample);
-            ItemGroup g = groups.groupFor(key);
-            if (g != null) s = g.groupId;
+            if (!key.isVanilla()) {
+                CustomItemClassifier.Result r = CustomItemClassifier.classify(groups.groupFor(key), key, sample == null ? Categorizer.MISC : Categorizer.categorize(sample), s);
+                s = r.family();
+            }
             subFamilyCache.put(key, s);
         }
         return s;
@@ -102,9 +105,8 @@ public final class CategoryResolver {
         ItemStack sample = sampleStack(key);
         String heuristic = sample == null ? Categorizer.MISC : Categorizer.categorize(sample);
         if (!key.isVanilla()) {
-            // Custom gear keeps its functional category so the essentials rules work; everything else is Custom.
-            if (heuristic.equals(Categorizer.TOOLS) || heuristic.equals(Categorizer.ARMOR)) return heuristic;
-            return Categorizer.CUSTOM;
+            String fam = sample == null ? key.itemId : Categorizer.subFamily(sample);
+            return CustomItemClassifier.classify(g, key, heuristic, fam).category();
         }
         return heuristic;
     }

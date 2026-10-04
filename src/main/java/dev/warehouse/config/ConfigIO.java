@@ -10,6 +10,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 
 /** Loads and saves {@link ModConfig} as config/warehouse/config.json. */
 public final class ConfigIO {
@@ -58,6 +59,12 @@ public final class ConfigIO {
             ModConfig.defaultCategoryColors().forEach((k, v) -> c.categoryColors.putIfAbsent(k, v));
             if (c.categoryPriorShares == null || c.categoryPriorShares.isEmpty()) c.categoryPriorShares = ModConfig.defaultPriorShares();
             c.configVersion = 2;
+        }
+        if (c.configVersion < 3) {
+            ModConfig.defaultCategoryColors().forEach((k, v) -> c.categoryColors.putIfAbsent(k, v));
+            if (c.categoryPriorShares == null) c.categoryPriorShares = new LinkedHashMap<>();
+            ModConfig.defaultPriorShares().forEach((k, v) -> c.categoryPriorShares.putIfAbsent(k, v));
+            c.configVersion = 3;
         }
     }
 
