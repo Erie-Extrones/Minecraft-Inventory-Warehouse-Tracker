@@ -105,9 +105,15 @@ public final class PlanCommands {
         root.then(literal("lost").executes(c -> openTab(c.getSource().getClient(), SearchScreen.Tab.LOST)));
         root.then(literal("unsorted").executes(c -> openTab(c.getSource().getClient(), SearchScreen.Tab.UNSORTED)));
         root.then(literal("clearmode").executes(c -> {
-            WarehouseClient.clearMode().toggle(c.getSource().getClient());
+            WarehouseClient.clearMode().toggle(c.getSource().getClient(), dev.warehouse.modes.ClearInventoryMode.Kind.CLEAR);
             return 1;
         }));
+        root.then(literal("sort").executes(c -> {
+            WarehouseClient.clearMode().toggle(c.getSource().getClient(), dev.warehouse.modes.ClearInventoryMode.Kind.SORT);
+            return 1;
+        }));
+        root.then(literal("forget")
+                .then(literal("here").executes(c -> forgetHere(c.getSource().getClient()))));
         root.then(literal("find")
                 .executes(c -> {
                     FindHeldItem.run(c.getSource().getClient(), false);
@@ -143,6 +149,24 @@ public final class PlanCommands {
     private static int preview(boolean on) {
         WarehouseClient.organizer().setPreview(on);
         Chat.info("Plan preview " + (on ? "on" : "off") + ".");
+        return 1;
+    }
+
+    private static int forgetHere(Minecraft mc) {
+        if (mc.player == null || mc.level == null) return 0;
+        HitResult hit = mc.hitResult;
+        if (!(hit instanceof BlockHitResult bhr) || hit.getType() != HitResult.Type.BLOCK) {
+            Chat.error("Look at the container to forget.");
+            return 0;
+        }
+        ContainerResolver.Resolved res = ContainerResolver.resolveAt(mc, bhr.getBlockPos());
+        ContainerEntry e = res != null ? WarehouseClient.index().atBlock(res.dimension(), res.primary()) : null;
+        if (e == null) {
+            Chat.error("That block is not an indexed container.");
+            return 0;
+        }
+        WarehouseClient.index().remove(e.id);
+        Chat.info("Forgot " + e.label() + ". It will be re-indexed the next time you open it inside a region.");
         return 1;
     }
 

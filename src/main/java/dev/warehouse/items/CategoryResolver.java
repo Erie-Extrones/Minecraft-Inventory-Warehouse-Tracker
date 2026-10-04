@@ -9,7 +9,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
+import dev.warehouse.index.StackRecord;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -40,6 +42,30 @@ public final class CategoryResolver {
             cache.put(key, c);
         }
         return c;
+    }
+
+    /** Category honouring shulker contents: a box that is mostly one category files under that category. */
+    public String categoryOf(ItemKey key, @Nullable List<StackRecord> nested) {
+        if (nested == null || nested.isEmpty() || !ConfigIO.get().shulkerByContents) return categoryOf(key);
+        Map<String, Integer> weights = new HashMap<>();
+        int total = 0;
+        for (StackRecord n : nested) {
+            int w = Math.max(1, (int) Math.ceil(n.count / (double) Math.max(1, dev.warehouse.organizer.Allocator.maxStack(n.key))));
+            weights.merge(categoryOf(n.key, n.nested), w, Integer::sum);
+            total += w;
+        }
+        String best = null;
+        int bestW = 0;
+        for (Map.Entry<String, Integer> en : weights.entrySet()) if (en.getValue() > bestW) {
+            best = en.getKey();
+            bestW = en.getValue();
+        }
+        if (best != null && bestW * 2 >= total) return best;
+        return categoryOf(key);
+    }
+
+    public String categoryOf(ItemStack stack) {
+        return categoryOf(Fingerprinter.key(stack), NestedContents.of(stack));
     }
 
     public String subFamilyOf(ItemKey key) {

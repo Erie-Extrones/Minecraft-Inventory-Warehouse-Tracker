@@ -41,6 +41,9 @@ public final class ScreenTracker {
         public boolean receivedContents;
         public int ticksOpen;
         public final List<Integer> clickedSlots = new ArrayList<>();
+        /** Last snapshotted container slot contents, to detect client-side changes between packets. */
+        List<ItemStack> lastSlots = List.of();
+        boolean rejected;
 
         Session(AbstractContainerScreen<?> screen, ContainerResolver.Resolved resolved) {
             this.screen = screen;
@@ -92,7 +95,11 @@ public final class ScreenTracker {
             if (!s.receivedContents && s.ticksOpen == 2 && hasAnyItem(s.menu)) {
                 s.receivedContents = true;
                 snapshot(mc, s);
+                return;
             }
+            // The server only sends slot packets when the client's prediction was wrong, so watch the
+            // menu ourselves and re-snapshot as soon as the container contents change.
+            if (s.receivedContents && s.ticksOpen % 2 == 0 && slotsChanged(mc, s)) snapshot(mc, s);
         });
     }
 
@@ -111,20 +118,44 @@ public final class ScreenTracker {
         }
     }
 
+    private static boolean slotsChanged(Minecraft mc, Session s) {
+        if (mc.player == null) return false;
+        int i = 0;
+        for (Slot slot : s.menu.slots) {
+            if (slot.container == mc.player.getInventory()) continue;
+            ItemStack now = slot.getItem();
+            if (i >= s.lastSlots.size()) return true;
+            ItemStack was = s.lastSlots.get(i++);
+            if (now.getCount() != was.getCount() || !ItemStack.isSameItemSameComponents(now, was)) return true;
+        }
+        return i != s.lastSlots.size();
+    }
+
     private static boolean hasAnyItem(AbstractContainerMenu menu) {
         for (Slot slot : menu.slots) if (slot.hasItem()) return true;
         return false;
     }
 
     public void snapshot(Minecraft mc, Session s) {
-        if (!s.indexingAllowed || mc.player == null) return;
+        if (!s.indexingAllowed || s.rejected || mc.player == null) return;
         List<ItemStack> stacks = new ArrayList<>();
         for (Slot slot : s.menu.slots) {
             if (slot.container == mc.player.getInventory()) continue;
             stacks.add(slot.getItem());
         }
         if (stacks.isEmpty()) return;
+        String title = s.screen.getTitle().getString();
+        if (looksLikePluginMenu(s, stacks, title)) {
+            s.rejected = true;
+            if (s.entry != null && s.entry.lastSeenEpochMs == 0 && !s.entry.manualPin) index.remove(s.entry.id);
+            Chat.warn("Not indexing '" + title + "': it doesn't look like the contents of a " + s.resolved.kind().label().toLowerCase() + " (plugin menu?).");
+            return;
+        }
+        List<ItemStack> copies = new ArrayList<>(stacks.size());
+        for (ItemStack st : stacks) copies.add(st.copy());
+        s.lastSlots = copies;
         ContainerEntry e = s.entry;
+        boolean firstSeen = e == null || e.lastSeenEpochMs == 0;
         if (e == null) {
             e = new ContainerEntry(UUID.randomUUID(), s.resolved.kind(), s.resolved.dimension(), s.resolved.primary());
             e.secondaryPos = s.resolved.secondary();
@@ -139,9 +170,31 @@ public final class ScreenTracker {
         e.contents = snapshotter.snapshot(stacks);
         e.slotCount = stacks.size();
         e.lastSeenEpochMs = System.currentTimeMillis();
-        String title = s.screen.getTitle().getString();
         e.customName = isDefaultTitle(title) ? null : title;
         index.upsert(e);
+        if (firstSeen) WarehouseClient.organizer().onContainerFirstSeen();
+    }
+
+    /**
+     * Plugin GUIs (crates, editors, shops) reuse chest menus. Reject when the slot count cannot belong to the
+     * resolved block, or when a non-default title fronts a grid of mostly custom-named items. Pinned containers are trusted.
+     */
+    private static boolean looksLikePluginMenu(Session s, List<ItemStack> stacks, String title) {
+        if (s.entry != null && s.entry.manualPin) return false;
+        int expected = switch (s.resolved.kind()) {
+            case DOUBLE_CHEST -> 54;
+            case CHEST, BARREL, SHULKER_BOX, ENDER_CHEST -> 27;
+            default -> -1;
+        };
+        if (expected > 0 && stacks.size() != expected) return true;
+        if (isDefaultTitle(title)) return false;
+        int nonEmpty = 0, customNamed = 0;
+        for (ItemStack st : stacks) {
+            if (st.isEmpty()) continue;
+            nonEmpty++;
+            if (st.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME) || st.has(net.minecraft.core.component.DataComponents.ITEM_NAME)) customNamed++;
+        }
+        return nonEmpty >= 6 && customNamed * 10 >= nonEmpty * 7;
     }
 
     private static boolean isDefaultTitle(String title) {

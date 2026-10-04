@@ -51,6 +51,28 @@ public final class ExtraCommands {
                                     Chat.info("Merged " + b.get().groupId + " into " + a.get().groupId + ".");
                                     return 1;
                                 }))))
+                .then(literal("prune").executes(c -> {
+                    var mc = c.getSource().getClient();
+                    java.util.Set<ItemKey> seen = new java.util.HashSet<>();
+                    for (ContainerEntry e : WarehouseClient.index().all()) {
+                        for (StackRecord s : e.contents) {
+                            seen.add(s.key);
+                            if (s.nested != null) for (StackRecord n : s.nested) seen.add(n.key);
+                        }
+                    }
+                    if (mc.player != null) {
+                        var inv = mc.player.getInventory();
+                        for (int i = 0; i < inv.getContainerSize(); i++) if (!inv.getItem(i).isEmpty()) seen.add(dev.warehouse.items.Fingerprinter.key(inv.getItem(i)));
+                    }
+                    var groups = WarehouseClient.itemGroups().all();
+                    int before = groups.size();
+                    groups.removeIf(g -> g.categoryOverride == null && g.members.stream().noneMatch(seen::contains));
+                    WarehouseClient.storage().items.markDirty();
+                    WarehouseClient.itemGroups().invalidate();
+                    WarehouseClient.categories().invalidate();
+                    Chat.info("Pruned " + (before - groups.size()) + " item group(s) with no known items; " + groups.size() + " remain.");
+                    return 1;
+                }))
                 .then(literal("category")
                         .then(argument("group", StringArgumentType.string())
                                 .then(argument("category", StringArgumentType.greedyString()).executes(c -> {

@@ -27,10 +27,11 @@ public final class Categorizer {
     public static final String DECOR = "Dyes & Decoration";
     public static final String POTIONS = "Potions & Brewing";
     public static final String TRANSPORT = "Transport";
+    public static final String STORAGE = "Storage";
     public static final String CUSTOM = "Custom";
     public static final String MISC = "Misc";
 
-    public static final List<String> DEFAULT_ORDER = List.of(BUILDING, NATURAL, WOOD, STONE, ORES, REDSTONE, TOOLS, ARMOR, FOOD, FARMING, MOB_DROPS, DECOR, POTIONS, TRANSPORT, CUSTOM, MISC);
+    public static final List<String> DEFAULT_ORDER = List.of(BUILDING, NATURAL, WOOD, STONE, ORES, REDSTONE, TOOLS, ARMOR, FOOD, FARMING, MOB_DROPS, DECOR, POTIONS, TRANSPORT, STORAGE, CUSTOM, MISC);
 
     private static final String[] WOOD_TYPES = {"pale_oak", "dark_oak", "oak", "spruce", "birch", "jungle", "acacia", "mangrove", "cherry", "bamboo", "crimson", "warped", "poplar"};
     private static final String[] COLORS = {"light_blue", "light_gray", "white", "orange", "magenta", "yellow", "lime", "pink", "gray", "cyan", "purple", "blue", "brown", "green", "red", "black"};
@@ -41,6 +42,8 @@ public final class Categorizer {
     /** Category for a stack (vanilla heuristics only). */
     public static String categorize(ItemStack stack) {
         String path = itemPath(stack);
+        if (stack.is(ItemTags.SHULKER_BOXES) || stack.is(ItemTags.BUNDLES) || path.equals("chest") || path.equals("trapped_chest") || path.equals("barrel") || path.equals("ender_chest") || path.endsWith("_bundle"))
+            return STORAGE;
         // --- components first: they are the most reliable signal in 26.x ---
         Equippable eq = stack.get(DataComponents.EQUIPPABLE);
         if (eq != null && eq.slot().isArmor()) return ARMOR;
@@ -63,7 +66,7 @@ public final class Categorizer {
         if (path.contains("seeds") || path.equals("wheat") || path.equals("carrot") || path.equals("potato") || path.equals("beetroot") || path.equals("sugar_cane") || path.equals("bamboo") || path.equals("cactus") || path.equals("cocoa_beans") || path.equals("bone_meal") || path.equals("sweet_berries") || path.equals("glow_berries") || path.contains("sapling") || path.equals("melon_slice") || path.equals("pumpkin") || path.equals("melon") || path.contains("mushroom") && !path.contains("stew") || path.equals("kelp") || path.equals("sea_pickle") || path.equals("nether_wart") || path.equals("hay_block") || path.equals("composter") || path.equals("honeycomb") || path.equals("honey_bottle") || path.contains("propagule") || path.equals("torchflower") || path.equals("pitcher_pod") || path.equals("egg"))
             return FARMING;
         if (isMobDrop(path)) return MOB_DROPS;
-        if (stack.is(ItemTags.LOGS) || stack.is(ItemTags.PLANKS) || stack.is(ItemTags.WOODEN_STAIRS) || stack.is(ItemTags.WOODEN_SLABS) || stack.is(ItemTags.WOODEN_FENCES) || stack.is(ItemTags.FENCE_GATES) || stack.is(ItemTags.WOODEN_DOORS) || stack.is(ItemTags.WOODEN_TRAPDOORS) || stack.is(ItemTags.SIGNS) || stack.is(ItemTags.HANGING_SIGNS) || path.equals("stick") || path.contains("stripped_") || path.endsWith("_wood") || path.endsWith("_hyphae") || path.equals("ladder") || path.equals("bookshelf") || path.equals("chest") || path.equals("barrel") || path.equals("crafting_table") || path.contains("bamboo"))
+        if (stack.is(ItemTags.LOGS) || stack.is(ItemTags.PLANKS) || stack.is(ItemTags.WOODEN_STAIRS) || stack.is(ItemTags.WOODEN_SLABS) || stack.is(ItemTags.WOODEN_FENCES) || stack.is(ItemTags.FENCE_GATES) || stack.is(ItemTags.WOODEN_DOORS) || stack.is(ItemTags.WOODEN_TRAPDOORS) || stack.is(ItemTags.SIGNS) || stack.is(ItemTags.HANGING_SIGNS) || path.equals("stick") || path.contains("stripped_") || path.endsWith("_wood") || path.endsWith("_hyphae") || path.equals("ladder") || path.equals("bookshelf") || path.equals("crafting_table") || path.contains("bamboo"))
             return WOOD;
         if (stack.is(ItemTags.WOOL) || stack.is(ItemTags.WOOL_CARPETS) || stack.is(ItemTags.BANNERS) || stack.is(ItemTags.BEDS) || stack.is(ItemTags.CANDLES) || stack.is(ItemTags.TERRACOTTA) || stack.is(ItemTags.GLAZED_TERRACOTTA) || stack.is(ItemTags.CONCRETE) || stack.is(ItemTags.CONCRETE_POWDERS) || path.contains("stained_glass") || path.contains("glass_pane") || path.equals("glass") || path.contains("carpet") || path.equals("painting") || path.equals("item_frame") || path.equals("glow_item_frame") || path.equals("armor_stand") || path.equals("flower_pot") || path.contains("lantern") || path.equals("torch") || path.equals("soul_torch") || path.equals("end_rod") || path.contains("candle") || path.contains("pottery_sherd") || path.equals("decorated_pot") || path.contains("_head") || path.contains("_skull") || path.contains("shelf") || path.contains("glass"))
             return DECOR;

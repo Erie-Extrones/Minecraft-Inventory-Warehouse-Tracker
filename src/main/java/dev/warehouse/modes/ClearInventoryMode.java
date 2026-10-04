@@ -11,6 +11,8 @@ import dev.warehouse.items.ItemKey;
 import dev.warehouse.organizer.Categorizer;
 import dev.warehouse.organizer.Organizer;
 import dev.warehouse.organizer.Plan;
+import dev.warehouse.organizer.PlanDiff;
+import dev.warehouse.organizer.RoutePlanner;
 import dev.warehouse.organizer.Zone;
 import dev.warehouse.region.RegionManager;
 import net.minecraft.client.Minecraft;
@@ -28,22 +30,40 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-/** Lights up destination chests for every non-essential inventory stack until the inventory is clear. */
+/**
+ * Route-guided put-away. CLEAR mode lights the destination chest of every non-essential inventory stack;
+ * SORT mode additionally visits chests holding misplaced items so they can be taken and re-homed.
+ * Stops are ordered into a short walking tour from the player and numbered in the world.
+ */
 public final class ClearInventoryMode {
+    public enum Kind { CLEAR, SORT }
+
     private boolean active;
+    private Kind kind = Kind.CLEAR;
     private boolean showEssentials;
-    /** Container id -> labels (item x count) for this tick. */
+    /** Destination chest id -> labels (item x count) for stacks in the inventory. */
     private final Map<UUID, List<String>> pendingByChest = new LinkedHashMap<>();
     private final Map<UUID, Integer> colorByChest = new LinkedHashMap<>();
+    /** Source chest id -> misplaced stack count (SORT only). */
+    private final Map<UUID, Integer> takeByChest = new LinkedHashMap<>();
+    private List<ContainerEntry> route = List.of();
+    private int routeTick;
+    private Set<UUID> lastStopSet = Set.of();
     private int noRoomCount;
     private int lastAnnouncedNoRoom = -1;
 
     public boolean isActive() {
         return active;
+    }
+
+    public Kind kind() {
+        return kind;
     }
 
     public boolean showEssentials() {
@@ -54,9 +74,17 @@ public final class ClearInventoryMode {
         showEssentials = b;
     }
 
+    public List<ContainerEntry> route() {
+        return route;
+    }
+
     public void toggle(Minecraft mc) {
-        if (active) {
-            exit("Clear-inventory mode off.");
+        toggle(mc, Kind.CLEAR);
+    }
+
+    public void toggle(Minecraft mc, Kind wanted) {
+        if (active && kind == wanted) {
+            exit((kind == Kind.SORT ? "Sort" : "Clear-inventory") + " mode off.");
             return;
         }
         if (!WarehouseClient.organizer().plan().isActive()) {
@@ -64,12 +92,14 @@ public final class ClearInventoryMode {
             return;
         }
         active = true;
+        kind = wanted;
         lastAnnouncedNoRoom = -1;
+        lastStopSet = Set.of();
         refresh(mc);
-        if (pendingByChest.isEmpty() && noRoomCount == 0) {
-            exit("Nothing to put away — inventory is clear (essentials kept).");
+        if (pendingByChest.isEmpty() && takeByChest.isEmpty() && noRoomCount == 0) {
+            exit(kind == Kind.SORT ? "Nothing to sort — no misplaced items and the inventory is clear." : "Nothing to put away — inventory is clear (essentials kept).");
         } else {
-            Chat.info("Clear-inventory mode: " + pendingByChest.size() + " chest(s) lit. Walk to each and press Deposit matching.");
+            Chat.info((kind == Kind.SORT ? "Sort mode: " : "Clear-inventory mode: ") + (pendingByChest.size() + takeByChest.size()) + " stop(s). Follow the particles; stop 1 is lit brightest.");
         }
     }
 
@@ -77,31 +107,34 @@ public final class ClearInventoryMode {
         active = false;
         pendingByChest.clear();
         colorByChest.clear();
+        takeByChest.clear();
+        route = List.of();
         Chat.info(msg);
     }
 
     public void onDeposited(Minecraft mc) {
-        if (!active) return;
-        // Contents will arrive via the container packet; refresh next tick.
+        // Contents arrive via the screen tracker; the next tick's refresh picks them up.
     }
 
     /** Called every client tick. */
     public void tick(Minecraft mc) {
         if (!active || mc.player == null || mc.level == null) return;
         refresh(mc);
-        if (pendingByChest.isEmpty() && noRoomCount == 0) {
-            exit("Inventory clear — clear-inventory mode off.");
+        if (pendingByChest.isEmpty() && takeByChest.isEmpty() && noRoomCount == 0) {
+            exit(kind == Kind.SORT ? "Everything sorted — sort mode off." : "Inventory clear — clear-inventory mode off.");
             return;
         }
         if (noRoomCount != lastAnnouncedNoRoom && noRoomCount > 0) {
             lastAnnouncedNoRoom = noRoomCount;
             Chat.warn(noRoomCount + " stack(s) have no destination with room; they stay in your inventory.");
         }
+        updateRoute(mc);
         render(mc);
     }
 
     private void refresh(Minecraft mc) {
         pendingByChest.clear();
+        takeByChest.clear();
         noRoomCount = 0;
         Inventory inv = mc.player.getInventory();
         for (int i = 0; i < inv.getContainerSize(); i++) {
@@ -113,8 +146,32 @@ public final class ClearInventoryMode {
                 continue;
             }
             pendingByChest.computeIfAbsent(dest.id, k -> new ArrayList<>()).add(Fingerprinter.displayName(st) + " ×" + st.getCount());
-            colorByChest.computeIfAbsent(dest.id, k -> WarehouseClient.organizer().categoryColor(WarehouseClient.categories().categoryOf(Fingerprinter.key(st))));
+            colorByChest.computeIfAbsent(dest.id, k -> WarehouseClient.organizer().categoryColor(WarehouseClient.categories().categoryOf(st)));
         }
+        if (kind == Kind.SORT) {
+            for (PlanDiff.Misplaced m : WarehouseClient.planDiff().entries()) takeByChest.merge(m.source().id, 1, Integer::sum);
+        }
+    }
+
+    private void updateRoute(Minecraft mc) {
+        Set<UUID> stops = new LinkedHashSet<>(pendingByChest.keySet());
+        Inventory inv = mc.player.getInventory();
+        int freeSlots = 0;
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) if (inv.getItem(i).isEmpty()) freeSlots++;
+        // Pick-ups only count while there is room to carry; otherwise offload first.
+        if (kind == Kind.SORT && freeSlots >= 4) stops.addAll(takeByChest.keySet());
+        if (stops.isEmpty()) stops.addAll(takeByChest.keySet());
+        boolean changed = !stops.equals(lastStopSet);
+        if (!changed && ++routeTick % 60 != 0) return;
+        routeTick = 0;
+        lastStopSet = stops;
+        List<ContainerEntry> entries = new ArrayList<>();
+        String dim = RegionManager.dimensionId(mc.level);
+        for (UUID id : stops) {
+            ContainerEntry e = WarehouseClient.index().byId(id);
+            if (e != null && e.dimension.equals(dim)) entries.add(e);
+        }
+        route = RoutePlanner.order(mc.player.position(), entries);
     }
 
     /** Destination for an inventory stack while the mode is active; null if essential, no plan, or no room. */
@@ -122,12 +179,11 @@ public final class ClearInventoryMode {
         if (!active || stack.isEmpty()) return null;
         if (isEssential(mc, stack, inventorySlot)) return null;
         Organizer organizer = WarehouseClient.organizer();
-        ItemKey key = Fingerprinter.key(stack);
-        Organizer.Resolution res = organizer.resolve(key);
+        Organizer.Resolution res = organizer.resolve(stack);
         if (res == null) return null;
         ContainerEntry dest = res.container();
+        ItemKey key = Fingerprinter.key(stack);
         if (dest.freeSlots() > 0 || dest.totalCount(key) > 0) return dest;
-        // Full destination -> next chest in the same zone with room.
         Plan plan = organizer.plan();
         String zoneName = plan.zoneOf(dest.id);
         Zone zone = zoneName != null ? plan.zones.get(zoneName) : null;
@@ -143,7 +199,6 @@ public final class ClearInventoryMode {
     public boolean isEssential(Minecraft mc, ItemStack stack, int inventorySlot) {
         ModConfig cfg = ConfigIO.get();
         if (inventorySlot >= Inventory.INVENTORY_SIZE) {
-            // 36..39 armor, 40 offhand
             if (inventorySlot == 40) return cfg.essentialOffhand;
             return cfg.essentialEquippedArmor;
         }
@@ -166,40 +221,40 @@ public final class ClearInventoryMode {
         return false;
     }
 
+    private static AABB boxOf(ContainerEntry e) {
+        return e.secondaryPos != null ? AABB.encapsulatingFullBlocks(e.pos, e.secondaryPos) : new AABB(e.pos);
+    }
+
     private void render(Minecraft mc) {
-        String dim = RegionManager.dimensionId(mc.level);
-        Vec3 eye = mc.player.getEyePosition().add(0, -0.3, 0);
+        Vec3 eye = mc.player.getEyePosition();
+        float pulse = 0.6F + 0.4F * (float) Math.sin(System.currentTimeMillis() / 200.0);
         try {
-            ContainerEntry nearest = null;
-            double nearestD = Double.MAX_VALUE;
-            for (Map.Entry<UUID, List<String>> en : pendingByChest.entrySet()) {
-                ContainerEntry e = WarehouseClient.index().byId(en.getKey());
-                if (e == null || !e.dimension.equals(dim)) continue;
-                int color = colorByChest.getOrDefault(e.id, 0xFFFFFFFF);
-                AABB box = e.secondaryPos != null ? AABB.encapsulatingFullBlocks(e.pos, e.secondaryPos) : new AABB(e.pos);
-                float pulse = 0.6F + 0.4F * (float) Math.sin(System.currentTimeMillis() / 200.0);
-                Gizmos.cuboid(box.inflate(0.03), GizmoStyle.strokeAndFill(color, 3.0F, ARGB.color((int) (80 * pulse), color))).setAlwaysOnTop();
+            for (int i = 0; i < route.size(); i++) {
+                ContainerEntry e = route.get(i);
+                boolean next = i == 0;
+                boolean deposit = pendingByChest.containsKey(e.id);
+                boolean take = takeByChest.containsKey(e.id);
+                int color = deposit ? colorByChest.getOrDefault(e.id, 0xFFFFFFFF) : 0xFFFF7050;
+                AABB box = boxOf(e);
+                float stroke = next ? 3.5F : 1.5F;
+                int fill = ARGB.color(next ? (int) (90 * pulse) : 25, color);
+                Gizmos.cuboid(box.inflate(next ? 0.04 : 0.01), GizmoStyle.strokeAndFill(next ? color : ARGB.color(140, color), stroke, fill)).setAlwaysOnTop();
                 Vec3 c = box.getCenter();
-                Gizmos.line(new Vec3(c.x, box.maxY, c.z), new Vec3(c.x, box.maxY + 8, c.z), ARGB.color(150, color), 2.0F).setAlwaysOnTop();
-                List<String> labels = en.getValue();
-                int shown = Math.min(labels.size(), 4);
+                if (next) Gizmos.line(new Vec3(c.x, box.maxY, c.z), new Vec3(c.x, box.maxY + 8, c.z), ARGB.color(150, color), 2.0F).setAlwaysOnTop();
                 double d = c.distanceToSqr(eye);
-                if (d < 40 * 40) {
-                    for (int i = 0; i < shown; i++) {
-                        Gizmos.billboardText(labels.get(i), new Vec3(c.x, box.maxY + 0.5 + (shown - i) * 0.28, c.z), TextGizmo.Style.forColorAndCentered(color).withScale(0.3F)).setAlwaysOnTop();
-                    }
-                    if (labels.size() > shown) {
-                        Gizmos.billboardText("+" + (labels.size() - shown) + " more", new Vec3(c.x, box.maxY + 0.5, c.z), TextGizmo.Style.forColorAndCentered(0xFFAAAAAA).withScale(0.28F)).setAlwaysOnTop();
+                if (d < 48 * 48 || next) {
+                    String head = (i + 1) + (take && deposit ? "  take + deposit" : take ? "  take " + takeByChest.get(e.id) + " misplaced" : "  deposit");
+                    Gizmos.billboardText(head, new Vec3(c.x, box.maxY + 0.55, c.z), TextGizmo.Style.forColorAndCentered(next ? 0xFFFFFFFF : color).withScale(next ? 0.4F : 0.3F)).setAlwaysOnTop();
+                    if (deposit && (next || d < 16 * 16)) {
+                        List<String> labels = pendingByChest.get(e.id);
+                        int shown = Math.min(labels.size(), next ? 5 : 2);
+                        for (int k = 0; k < shown; k++) {
+                            Gizmos.billboardText(labels.get(k), new Vec3(c.x, box.maxY + 0.85 + (shown - k) * 0.26, c.z), TextGizmo.Style.forColorAndCentered(color).withScale(0.28F)).setAlwaysOnTop();
+                        }
+                        if (labels.size() > shown) Gizmos.billboardText("+" + (labels.size() - shown) + " more", new Vec3(c.x, box.maxY + 0.85, c.z), TextGizmo.Style.forColorAndCentered(0xFFAAAAAA).withScale(0.26F)).setAlwaysOnTop();
                     }
                 }
-                if (d < nearestD) {
-                    nearestD = d;
-                    nearest = e;
-                }
-            }
-            if (nearest != null) {
-                AABB box = nearest.secondaryPos != null ? AABB.encapsulatingFullBlocks(nearest.pos, nearest.secondaryPos) : new AABB(nearest.pos);
-                Gizmos.line(eye, box.getCenter(), ARGB.color(180, colorByChest.getOrDefault(nearest.id, 0xFFFFFFFF)), 2.0F).setAlwaysOnTop();
+                if (next) WarehouseClient.guidePath().request(box, color, 20);
             }
         } catch (IllegalStateException ignored) {
         }
@@ -207,5 +262,9 @@ public final class ClearInventoryMode {
 
     public Map<UUID, List<String>> pending() {
         return pendingByChest;
+    }
+
+    public Map<UUID, Integer> takeByChest() {
+        return takeByChest;
     }
 }

@@ -111,6 +111,7 @@ public final class HighlightRenderer {
         String dim = RegionManager.dimensionId(mc.level);
         Vec3 eye = mc.player.getEyePosition().add(0, -0.4, 0);
         Iterator<Highlight> it = active.iterator();
+        Highlight guideTarget = null;
         try {
             while (it.hasNext()) {
                 Highlight h = it.next();
@@ -129,9 +130,7 @@ public final class HighlightRenderer {
                 if (h.label != null) {
                     Gizmos.billboardText(h.label, new Vec3(center.x, box.maxY + 0.6, center.z), TextGizmo.Style.forColorAndCentered(h.color).withScale(0.35F)).setAlwaysOnTop();
                 }
-                if (h.lineFromPlayer) {
-                    Gizmos.line(eye, center, ARGB.color(200, h.color), 2.0F).setAlwaysOnTop();
-                }
+                if (h.lineFromPlayer) guideTarget = h; // the most recently added guided highlight wins
                 if (h.linkedTo != null) {
                     AABB other = h.linkedTo.resolveBox(mc);
                     Gizmos.arrow(center, other.getCenter(), h.color, 3.0F).setAlwaysOnTop();
@@ -139,5 +138,6 @@ public final class HighlightRenderer {
             }
         } catch (IllegalStateException ignored) {
         }
+        if (guideTarget != null) dev.warehouse.WarehouseClient.guidePath().request(guideTarget.resolveBox(mc), guideTarget.color, 5);
     }
 }

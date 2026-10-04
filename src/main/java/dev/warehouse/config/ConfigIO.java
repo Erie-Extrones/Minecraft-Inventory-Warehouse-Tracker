@@ -44,8 +44,21 @@ public final class ConfigIO {
         } else {
             config = new ModConfig();
         }
+        migrate(config);
         // Always rewrite so new fields show up with defaults.
         save();
+    }
+
+    /** Apply default additions introduced after the file was first written. */
+    private static void migrate(ModConfig c) {
+        if (c.configVersion < 2) {
+            for (String id : new String[]{"minecraft:container", "minecraft:bundle_contents"}) {
+                if (!c.strippedComponents.contains(id)) c.strippedComponents.add(id);
+            }
+            ModConfig.defaultCategoryColors().forEach((k, v) -> c.categoryColors.putIfAbsent(k, v));
+            if (c.categoryPriorShares == null || c.categoryPriorShares.isEmpty()) c.categoryPriorShares = ModConfig.defaultPriorShares();
+            c.configVersion = 2;
+        }
     }
 
     public static synchronized void save() {

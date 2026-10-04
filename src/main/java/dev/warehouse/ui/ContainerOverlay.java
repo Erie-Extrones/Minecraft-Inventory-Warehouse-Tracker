@@ -79,7 +79,7 @@ public final class ContainerOverlay {
             if (mode.isActive()) {
                 dest = mode.destinationFor(mc, stack, invSlot); // null when essential or no room
             } else {
-                var res = WarehouseClient.organizer().resolve(Fingerprinter.key(stack));
+                var res = WarehouseClient.organizer().resolve(stack);
                 dest = res != null ? res.container() : null;
             }
             if (dest != null && dest.id.equals(here.id)) out.add(slot);

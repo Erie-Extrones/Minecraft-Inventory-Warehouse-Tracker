@@ -56,7 +56,7 @@ public final class SearchScreen extends Screen {
     private int rebuildIn;
     private final List<Button> tabButtons = new ArrayList<>();
     private final List<Button> planButtons = new ArrayList<>();
-    private Button minMinus, minPlus, essentialsToggle, clearLostButton, clearHighlights;
+    private Button minMinus, minPlus, essentialsToggle, clearLostButton, clearHighlights, sortRoute;
 
     public SearchScreen() {
         super(Component.literal("Warehouse"));
@@ -125,6 +125,10 @@ public final class SearchScreen extends Screen {
             misplacedMin = Math.min(64, misplacedMin + (misplacedMin >= 16 ? 16 : 1));
             rebuild();
         }).bounds(100, 44, 18, 18).build());
+        sortRoute = addRenderableWidget(Button.builder(Component.literal("Sort route"), b -> {
+            WarehouseClient.clearMode().toggle(minecraft, dev.warehouse.modes.ClearInventoryMode.Kind.SORT);
+            onClose();
+        }).bounds(126, 44, 80, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Guide me chest to chest to take misplaced items and put them where they belong"))).build());
         essentialsToggle = addRenderableWidget(Button.builder(Component.literal("Show essentials"), b -> {
             WarehouseClient.clearMode().setShowEssentials(!WarehouseClient.clearMode().showEssentials());
             rebuild();
@@ -159,7 +163,7 @@ public final class SearchScreen extends Screen {
         query.visible = t == Tab.SEARCH;
         clearHighlights.visible = t == Tab.SEARCH || t == Tab.MISPLACED || t == Tab.LOST || t == Tab.UNSORTED;
         for (Button b : planButtons) b.visible = t == Tab.PLAN;
-        minMinus.visible = minPlus.visible = t == Tab.MISPLACED;
+        minMinus.visible = minPlus.visible = sortRoute.visible = t == Tab.MISPLACED;
         essentialsToggle.visible = t == Tab.UNSORTED;
         clearLostButton.visible = t == Tab.LOST;
         if (t == Tab.SEARCH) setFocused(query);
