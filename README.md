@@ -20,8 +20,9 @@ Install the jar and Fabric API in your `mods` folder. The mod never loads on a d
 3. **Open chests.** Any chest, barrel, shulker box or ender chest you open inside a region is indexed. Armor stands and item frames inside regions are indexed automatically. Chests outside a region are ignored unless you pin them with the small **W** button at the top right of the chest screen.
 4. **Hover an item.** The tooltip shows where it is stored and, once a plan exists, where it belongs.
 5. **Hold an item inside the region.** The chest it belongs in stays highlighted, with a trail of colored particles along a walkable path to it, for as long as you hold it and stand inside a Warehouse region. With an accepted plan this is the planned destination; without one it is where the item is currently stored. Turn it off with `/warehouse guide off`.
-6. **Find anything.** `/warehouse find` (or the *Find held item* key) highlights where the item in your hand is stored, from anywhere. `/warehouse find all` lights every chest holding it.
-7. **Search.** Press the **Warehouse** button above your inventory, bind the *Open warehouse search* key in Controls (unbound by default), or run `/warehouse search`. Click a result to highlight that chest in the world for 30 seconds.
+6. **Sneak to check stock.** Hold sneak and a card appears next to the crosshair. Holding an item shows how many of it the warehouse holds, where the most are, how many you carry, and where it belongs. With empty hands it describes the block you are looking at instead. Looking at a chest shows its zone, fill level, last-seen time and top contents. `lookHud` in the config turns it off.
+7. **Find anything.** `/warehouse find` (or the *Find held item* key) highlights where the item in your hand is stored, from anywhere. `/warehouse find all` lights every chest holding it.
+8. **Search.** Press the **Warehouse** button above your inventory, bind the *Open warehouse search* key in Controls (unbound by default), or run `/warehouse search`. Click a result to highlight that chest in the world for 30 seconds.
 
 ## GriefPrevention claims
 

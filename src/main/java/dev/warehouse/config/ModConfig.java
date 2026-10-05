@@ -25,6 +25,8 @@ public final class ModConfig {
 
     /** While standing in a Warehouse region holding an item, keep its destination chest highlighted. */
     public boolean heldItemGuide = true;
+    /** Sneak while looking at a block to see its warehouse stock next to the crosshair. */
+    public boolean lookHud = true;
     /** Show a Warehouse button on the inventory screen. */
     public boolean inventoryButton = true;
     /** Lead the player to the current target with a particle trail along a walkable path. */

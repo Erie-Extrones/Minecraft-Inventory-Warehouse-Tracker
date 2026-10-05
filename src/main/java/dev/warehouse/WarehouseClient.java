@@ -24,6 +24,7 @@ import dev.warehouse.render.PlanPreviewRenderer;
 import dev.warehouse.ui.FindHeldItem;
 import dev.warehouse.ui.HeldItemGuide;
 import dev.warehouse.ui.InventoryButton;
+import dev.warehouse.ui.LookHud;
 import dev.warehouse.ui.SearchScreen;
 import dev.warehouse.ui.TooltipProvider;
 import dev.warehouse.region.RegionManager;
@@ -207,6 +208,7 @@ public final class WarehouseClient implements ClientModInitializer {
         TooltipProvider.register();
         DropDetector.register();
         InventoryButton.register();
+        new LookHud().register();
         WarehouseCommands.register();
 
         ClientPlayConnectionEvents.JOIN.register((listener, sender, client) -> {
