@@ -1,0 +1,71 @@
+name: Release
+
+# Publishes a GitHub release with the built jar.
+# Trigger either by pushing a tag like v0.1.0, or from the Actions tab with "Run workflow".
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create or reuse (for example v0.1.0). Leave empty to use v<mod_version> from gradle.properties."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Build
+        run: ./gradlew build --no-daemon
+
+      - name: Work out version and tag
+        id: meta
+        run: |
+          MOD_VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          MC_VERSION=$(grep '^minecraft_version=' gradle.properties | cut -d= -f2)
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="v${MOD_VERSION}"
+          fi
+          ASSET="warehouse-${MOD_VERSION}+mc${MC_VERSION}.jar"
+          cp "build/libs/warehouse-${MOD_VERSION}.jar" "$ASSET"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+          echo "title=Warehouse ${MOD_VERSION} for Minecraft ${MC_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag if it does not exist
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git fetch --tags
+          if ! git rev-parse "${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
+            git tag "${{ steps.meta.outputs.tag }}"
+            git push origin "${{ steps.meta.outputs.tag }}"
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES_ARGS="--generate-notes"
+          if [ -f .github/release-notes.md ]; then NOTES_ARGS="--notes-file .github/release-notes.md"; fi
+          if gh release view "${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
+            gh release upload "${{ steps.meta.outputs.tag }}" "${{ steps.meta.outputs.asset }}" --clobber
+          else
+            gh release create "${{ steps.meta.outputs.tag }}" "${{ steps.meta.outputs.asset }}" \
+              --title "${{ steps.meta.outputs.title }}" $NOTES_ARGS
+          fi
