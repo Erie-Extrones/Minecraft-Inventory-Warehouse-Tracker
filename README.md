@@ -42,6 +42,8 @@ After accepting:
 - `/warehouse plan replan` keeps zone assignments that still fit and only moves new chests or overflowing categories.
 - `/warehouse plan override here` pins the item in your hand to the chest you are looking at. `/warehouse plan category <item or group> <category>` changes a category for this server.
 
+Chests you break or move are forgotten automatically within a few seconds of walking near their old spot, and the mod reminds you to replan once you are done rearranging.
+
 Chunks that are not loaded cannot be scanned. The run report says how many were missed; walk the area and rerun.
 
 ## Clear inventory mode
