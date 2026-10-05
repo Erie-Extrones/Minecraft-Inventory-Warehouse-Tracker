@@ -9,6 +9,7 @@ import dev.warehouse.index.ContainerIndex;
 import dev.warehouse.index.EntityScanner;
 import dev.warehouse.index.ScreenTracker;
 import dev.warehouse.index.Snapshotter;
+import dev.warehouse.index.StaleContainerSweeper;
 import dev.warehouse.items.CategoryResolver;
 import dev.warehouse.items.ItemGroups;
 import dev.warehouse.inventory.DropDetector;
@@ -68,6 +69,7 @@ public final class WarehouseClient implements ClientModInitializer {
     private InventoryTracker inventoryTracker;
     private HeldItemGuide heldItemGuide;
     private GuidePath guidePath;
+    private StaleContainerSweeper staleSweeper;
 
     public static WarehouseClient get() {
         return instance;
@@ -188,6 +190,7 @@ public final class WarehouseClient implements ClientModInitializer {
         inventoryTracker = new InventoryTracker();
         heldItemGuide = new HeldItemGuide();
         guidePath = new GuidePath();
+        staleSweeper = new StaleContainerSweeper(index);
         organizer.onChange(heldItemGuide::invalidate);
         storage.onBind(() -> {
             itemGroups.invalidate();
@@ -253,6 +256,7 @@ public final class WarehouseClient implements ClientModInitializer {
         claimParser.tick();
         visualizationCapture.tick(mc);
         entityScanner.tick(mc);
+        staleSweeper.tick(mc);
         regionRenderer.tick(mc);
         highlights.tick(mc);
         planPreview.tick(mc);
