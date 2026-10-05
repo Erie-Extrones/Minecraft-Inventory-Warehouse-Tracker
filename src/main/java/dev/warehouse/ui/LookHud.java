@@ -37,6 +37,7 @@ public final class LookHud {
     private record Line(String text, int color) {}
 
     private BlockPos lastPos;
+    private ItemStack lastHeld = ItemStack.EMPTY;
     private long lastComputeMs;
     private ItemStack icon = ItemStack.EMPTY;
     private String title = "";
@@ -54,35 +55,47 @@ public final class LookHud {
             return;
         }
         HitResult hit = mc.hitResult;
-        if (!(hit instanceof BlockHitResult bhr) || hit.getType() != HitResult.Type.BLOCK) {
+        BlockPos pos = hit instanceof BlockHitResult bhr && hit.getType() == HitResult.Type.BLOCK ? bhr.getBlockPos() : null;
+        ItemStack held = mc.player.getMainHandItem();
+        if (pos == null && held.isEmpty()) {
             lastPos = null;
             return;
         }
-        BlockPos pos = bhr.getBlockPos();
         long now = System.currentTimeMillis();
-        if (!pos.equals(lastPos) || now - lastComputeMs > 500) {
-            lastPos = pos.immutable();
+        boolean changed = !java.util.Objects.equals(pos, lastPos) || held.getCount() != lastHeld.getCount() || !ItemStack.isSameItemSameComponents(held, lastHeld);
+        if (changed || now - lastComputeMs > 500) {
+            lastPos = pos != null ? pos.immutable() : null;
+            lastHeld = held.copy();
             lastComputeMs = now;
-            compute(mc, pos);
+            compute(mc, pos, held);
         }
         if (lines.isEmpty() && title.isEmpty()) return;
         draw(g, mc.font);
     }
 
-    private void compute(Minecraft mc, BlockPos pos) {
+    /** Priority: an indexed chest you look at, then the item in your hand, then the block you look at. */
+    private void compute(Minecraft mc, BlockPos pos, ItemStack held) {
         lines.clear();
         title = "";
         icon = ItemStack.EMPTY;
-        BlockState state = mc.level.getBlockState(pos);
-        ContainerResolver.Resolved res = ContainerResolver.isAllowlisted(state) ? ContainerResolver.resolveAt(mc, pos) : null;
-        if (res != null) {
-            ContainerEntry e = WarehouseClient.index().atBlock(res.dimension(), res.primary());
-            describeContainer(e, res);
+        if (pos != null) {
+            BlockState state = mc.level.getBlockState(pos);
+            ContainerResolver.Resolved res = ContainerResolver.isAllowlisted(state) ? ContainerResolver.resolveAt(mc, pos) : null;
+            if (res != null) {
+                ContainerEntry e = WarehouseClient.index().atBlock(res.dimension(), res.primary());
+                describeContainer(e, res);
+                return;
+            }
+        }
+        if (!held.isEmpty()) {
+            describeItem(held);
             return;
         }
-        Item item = state.getBlock().asItem();
-        if (item == null || item == Items.AIR) return;
-        describeItem(new ItemStack(item));
+        if (pos != null) {
+            Item item = mc.level.getBlockState(pos).getBlock().asItem();
+            if (item == null || item == Items.AIR) return;
+            describeItem(new ItemStack(item));
+        }
     }
 
     private void describeContainer(ContainerEntry e, ContainerResolver.Resolved res) {
