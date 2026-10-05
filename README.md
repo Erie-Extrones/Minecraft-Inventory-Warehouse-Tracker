@@ -133,6 +133,10 @@ Everything the mod knows is what the client has seen. Every location is "last se
 
 Needs JDK 25. The jar lands in `build/libs/`.
 
+## Releasing
+
+Push a tag like `v0.1.0`, or open the **Actions** tab, pick **Release** and press *Run workflow*. GitHub builds the jar and publishes a release named after `mod_version` and `minecraft_version` in `gradle.properties`, using `.github/release-notes.md` as the description. Bump `mod_version` before tagging a new version.
+
 ## Categories
 
 Building Blocks, Colored Blocks (wool, carpet, concrete, terracotta, glass), Natural, Wood, Stone, Ores & Minerals, Redstone, Tools & Weapons, Armor, Food, Farming, Mob Drops, Dyes & Decoration, Potions & Brewing, Enchanting, Workstations, Transport, Storage, Keys & Currency, Infinite Items, Collectibles, Custom, Misc.
