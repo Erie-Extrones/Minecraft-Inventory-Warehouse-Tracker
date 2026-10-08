@@ -11,6 +11,8 @@ Client-only Fabric mod that remembers where your items live, decides which chest
 - Misplaced tab and **Sort route**: walk a numbered tour to pull wrong-chest items and put them where they belong. Clear-inventory mode does the same for whatever you carry.
 - 23 categories including Colored Blocks, Workstations, Enchanting, Keys & Currency, Infinite Items and Collectibles; plugin items (ExecutableItems, ExcellentCrates, ItemsAdder, MMOItems) are recognised and grouped by pack.
 - Lost log for drops and deaths, export/import between PCs, chests that disappear are forgotten automatically.
+- **Condense** tab: when a zone runs low on slots the mod suggests which bulk items to pack into shulker boxes, how many slots that frees, and which chest the packed shulker goes back into.
+- **Controller support** via the separate `warehouse-controlify` jar (needs [Controlify](https://modrinth.com/mod/controlify)): d-pad/stick navigation of the warehouse screen, bumpers switch tabs, warehouse actions as proper controller bindings and radial-menu entries.
 
 ### Getting started
 1. Hold the wand, right-click a floor corner and the opposite ceiling corner of your storage room.

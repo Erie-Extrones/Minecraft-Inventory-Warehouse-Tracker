@@ -10,3 +10,6 @@ pluginManagement {
 }
 
 rootProject.name = 'warehouse'
+
+// Optional add-on jars. Each builds to its own build/libs.
+include 'controlify-addon'

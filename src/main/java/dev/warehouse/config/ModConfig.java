@@ -102,6 +102,18 @@ public final class ModConfig {
     /** Minimum stack count filter default for misplaced tab. */
     public int misplacedMinCount = 1;
 
+    // ---- Condensing into shulkers ----
+    /** Suggest packing bulk items into shulker boxes when a zone runs low on slots. */
+    public boolean condenseSuggestions = true;
+    /** A zone counts as low on space at this fill percentage. */
+    public int condenseAtFillPercent = 80;
+    /** Only suggest items that occupy at least this many slots in the zone. */
+    public int condenseMinStacks = 12;
+    /** Only suggest when packing frees at least this many slots. */
+    public int condenseMinSlotsFreed = 10;
+    /** Minutes between chat hints for the same zone. */
+    public int condenseHintCooldownMinutes = 30;
+
     // ---- Clear inventory mode essentials ----
     public boolean essentialEquippedArmor = true;
     public boolean essentialOffhand = true;

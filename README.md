@@ -37,6 +37,7 @@ Filled shulker boxes are filed by the category of their dominant contents; empty
 After accepting:
 
 - Tooltips say **Belongs in** for every item, even ones you have never stored.
+- The **Condense** tab (see below) tells you when a zone is running out of slots and which items to pack into shulkers.
 - The **Misplaced** tab lists stacks sitting in a chest whose zone does not match. Click one to highlight both chests with an arrow between them. Opening the source chest pulses the misplaced slots and shows a **Take misplaced** button; highlights update live as you move items.
 - When you open a chest you reached through search, find or the held-item guide, the slots holding that item pulse gold so you can spot it in a full chest.
 - **Sort route** (button on the Misplaced tab, or `/warehouse sort`) walks you through the fix: chests with misplaced items and the destinations for whatever you are carrying are ordered into a short tour, numbered in the world, with a particle trail to the next stop. When your inventory is nearly full it steers you to drop-offs first.
@@ -46,6 +47,16 @@ After accepting:
 Chests you break or move are forgotten automatically within a few seconds of walking near their old spot, and the mod reminds you to replan once you are done rearranging.
 
 Chunks that are not loaded cannot be scanned. The run report says how many were missed; walk the area and rerun.
+
+## Condensing into shulkers
+
+When a zone gets close to full (80% by default, `condenseAtFillPercent`) the mod looks for items that take up many slots in that zone and works out what packing them into shulker boxes would free. While you stand in the warehouse it says so in chat, once per zone every 30 minutes:
+
+> Building is 88% full. Packing Cobblestone, Stone and 2 more into 4 shulkers would free 61 slots. See /warehouse condense.
+
+The **Condense** tab (or `/warehouse condense`, `/warehouse condense list` for chat) lists every zone with its fill level and, per item: how many slots it uses now, how many shulkers it fits in, how many slots that frees, and which chest to put the packed shulker back into (the chest that held most of it, which has room once emptied). Click a row to highlight the chests holding that item, shift-click for only the biggest one. The footer shows how many empty shulkers you carry and how many are indexed. Items already inside shulkers and the Storage category itself are never suggested; `condenseMinStacks` and `condenseMinSlotsFreed` set the bar for a suggestion.
+
+Filled shulkers are filed by the category of their dominant contents, so once packed the shulker resolves back to the same zone.
 
 ## Clear inventory mode
 
@@ -77,6 +88,15 @@ Plugin markers recognised: ExecutableItems (`ei-id`), ExcellentCrates (`crate_ke
 /warehouse items category <group> <category>
 ```
 
+## Controller support (Controlify add-on)
+
+Controlify already turns the mod's keys into controller bindings and can click the screen's buttons, but the result list is not made of widgets, so it cannot be scrolled or selected with a stick. The separate **warehouse-controlify** jar fixes that. Put it in `mods` next to the warehouse jar and [Controlify](https://modrinth.com/mod/controlify); it does nothing without both.
+
+- **Warehouse screen:** down from the bottom row of controls enters the result list; up/down move the selection (hold to repeat), left/right or the bumpers switch tabs, up from the first row returns to the controls. Press selects the row (highlight), *GUI abstract action 1* does the shift-click variant (all locations), *GUI abstract action 2* opens the on-screen keyboard on the search box. The selected row's tooltip is shown beside it and a button legend sits at the bottom right. The search box is no longer focused automatically while a controller is in use, so the on-screen keyboard only opens when you ask for it.
+- **Bindings:** *Open warehouse search*, *Find held item*, *Toggle clear-inventory mode* and *Toggle region outlines* appear under a Warehouse category in Controlify's binding menu and can be put on the radial menu. Two container-screen bindings, *Take misplaced* and *Deposit matching*, are unbound by default; bind them in Controlify's settings and they act on the chest you have open.
+
+The add-on builds from the `controlify-addon` folder and is published with each release.
+
 ## Export and import
 
 `/warehouse export [name]` writes everything for the current server to `config/warehouse/exports/<name>.json` (gzipped above 5 MB). Copy the file to another PC and run `/warehouse import <file>` to merge, or `/warehouse import <file> replace` to wipe and load. The Plan tab also has an **Export** button.
@@ -90,6 +110,7 @@ Plugin markers recognised: ExecutableItems (`ei-id`), ExcellentCrates (`crate_ke
 /warehouse find [all]
 /warehouse guide [on|off]
 /warehouse search [query]      /warehouse misplaced      /warehouse lost      /warehouse unsorted
+/warehouse condense [list]     (what to pack into shulkers when a zone is low on space)
 /warehouse plan run | replan | accept | reject | show | clear | count <n> | preview [on|off]
 /warehouse plan override here | clear
 /warehouse plan category <item or group> <category>
@@ -131,11 +152,11 @@ Everything the mod knows is what the client has seen. Every location is "last se
 ./gradlew build
 ```
 
-Needs JDK 25. The jar lands in `build/libs/`.
+Needs JDK 25. The mod jar lands in `build/libs/`, the Controlify add-on in `controlify-addon/build/libs/`.
 
 ## Releasing
 
-Push a tag like `v0.1.0`, or open the **Actions** tab, pick **Release** and press *Run workflow*. GitHub builds the jar and publishes a release named after `mod_version` and `minecraft_version` in `gradle.properties`, using `.github/release-notes.md` as the description. Bump `mod_version` before tagging a new version.
+Push a tag like `v0.1.0`, or open the **Actions** tab, pick **Release** and press *Run workflow*. GitHub builds both jars and publishes a release named after `mod_version` and `minecraft_version` in `gradle.properties`, using `.github/release-notes.md` as the description. Bump `mod_version` before tagging a new version.
 
 ## Categories
 

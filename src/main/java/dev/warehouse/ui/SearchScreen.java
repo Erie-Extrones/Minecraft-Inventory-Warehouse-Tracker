@@ -34,12 +34,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-/** Tabbed warehouse UI: Search, Unsorted, Lost, Misplaced, Plan. */
+/** Tabbed warehouse UI: Search, Unsorted, Lost, Misplaced, Plan, Condense. */
 public final class SearchScreen extends Screen {
-    public enum Tab { SEARCH, UNSORTED, LOST, MISPLACED, PLAN }
+    public enum Tab { SEARCH, UNSORTED, LOST, MISPLACED, PLAN, CONDENSE }
 
     private static String lastQuery = "";
     private static Tab lastTab = Tab.SEARCH;
+    /** When false the search box is not focused automatically (controller input: an add-on opens the on-screen keyboard on demand). */
+    public static boolean autoFocusQuery = true;
 
     private interface RowAction { void run(boolean shift); }
 
@@ -50,6 +52,9 @@ public final class SearchScreen extends Screen {
     private EditBox query;
     private final List<Row> rows = new ArrayList<>();
     private int scroll;
+    /** Row selected by keyboard/controller navigation; -1 for none. Only drawn while {@link #listFocused}. */
+    private int selected = -1;
+    private boolean listFocused;
     private int listTop, listBottom, listLeft, listRight;
     private int misplacedMin = ConfigIO.get().misplacedMinCount;
     private String footer = "";
@@ -152,6 +157,7 @@ public final class SearchScreen extends Screen {
             case LOST -> "Lost";
             case MISPLACED -> "Misplaced";
             case PLAN -> "Plan";
+            case CONDENSE -> "Condense";
         };
     }
 
@@ -161,13 +167,102 @@ public final class SearchScreen extends Screen {
         scroll = 0;
         for (int i = 0; i < tabButtons.size(); i++) tabButtons.get(i).active = Tab.values()[i] != t;
         query.visible = t == Tab.SEARCH;
-        clearHighlights.visible = t == Tab.SEARCH || t == Tab.MISPLACED || t == Tab.LOST || t == Tab.UNSORTED;
+        clearHighlights.visible = t != Tab.PLAN;
         for (Button b : planButtons) b.visible = t == Tab.PLAN;
         minMinus.visible = minPlus.visible = sortRoute.visible = t == Tab.MISPLACED;
         essentialsToggle.visible = t == Tab.UNSORTED;
         clearLostButton.visible = t == Tab.LOST;
-        if (t == Tab.SEARCH) setFocused(query);
+        if (t == Tab.SEARCH && autoFocusQuery && !listFocused) setFocused(query);
         rebuild();
+        if (listFocused) selected = nextSelectable(-1, 1);
+    }
+
+    // ------------------------------------------------------------ keyboard / controller navigation API
+
+    public Tab tab() {
+        return tab;
+    }
+
+    public EditBox queryBox() {
+        return query;
+    }
+
+    /** Give the search box focus (switching to the Search tab if needed) so typing or an on-screen keyboard reaches it. */
+    public void focusQuery() {
+        listFocused = false;
+        if (tab != Tab.SEARCH) switchTab(Tab.SEARCH);
+        setFocused(query);
+    }
+
+    public boolean listFocused() {
+        return listFocused;
+    }
+
+    public int rowCount() {
+        return rows.size();
+    }
+
+    public int selectedRow() {
+        return listFocused ? selected : -1;
+    }
+
+    /** Move keyboard/controller focus into or out of the result list. Entering selects the first clickable row. */
+    public void setListFocused(boolean focused) {
+        listFocused = focused;
+        if (focused) {
+            clearFocus();
+            if (selected < 0 || selected >= rows.size() || rows.get(selected).onClick == null) selected = nextSelectable(-1, 1);
+            ensureSelectedVisible();
+        }
+    }
+
+    /** Move the selection by {@code delta} clickable rows. Returns false when already at the end. */
+    public boolean moveSelection(int delta) {
+        if (!listFocused || rows.isEmpty()) return false;
+        int next = nextSelectable(selected, delta < 0 ? -1 : 1);
+        if (next < 0) return false;
+        for (int i = 1; i < Math.abs(delta); i++) {
+            int n = nextSelectable(next, delta < 0 ? -1 : 1);
+            if (n < 0) break;
+            next = n;
+        }
+        selected = next;
+        ensureSelectedVisible();
+        return true;
+    }
+
+    /** Page up/down: as many rows as fit in the list. */
+    public boolean pageSelection(int pages) {
+        int perPage = Math.max(1, (listBottom - listTop) / ROW_H - 1);
+        return moveSelection(pages * perPage);
+    }
+
+    /** Click the selected row. */
+    public void activateSelected(boolean shift) {
+        if (!listFocused || selected < 0 || selected >= rows.size()) return;
+        Row r = rows.get(selected);
+        if (r.onClick != null) r.onClick.run(shift);
+    }
+
+    /** Switch to the previous/next tab (wraps). */
+    public void switchTabBy(int dir) {
+        Tab[] all = Tab.values();
+        switchTab(all[Math.floorMod(tab.ordinal() + dir, all.length)]);
+    }
+
+    private int nextSelectable(int from, int dir) {
+        for (int i = from + dir; i >= 0 && i < rows.size(); i += dir) if (rows.get(i).onClick != null) return i;
+        return -1;
+    }
+
+    private void ensureSelectedVisible() {
+        if (selected < 0) return;
+        int top = selected * ROW_H;
+        int viewH = listBottom - listTop;
+        if (top < scroll) scroll = top;
+        else if (top + ROW_H > scroll + viewH) scroll = top + ROW_H - viewH;
+        int maxScroll = Math.max(0, rows.size() * ROW_H - viewH);
+        scroll = Math.max(0, Math.min(maxScroll, scroll));
     }
 
     @Override
@@ -190,9 +285,11 @@ public final class SearchScreen extends Screen {
             case LOST -> buildLost();
             case MISPLACED -> buildMisplaced();
             case PLAN -> buildPlan();
+            case CONDENSE -> buildCondense();
         }
         int maxScroll = Math.max(0, rows.size() * ROW_H - (listBottom - listTop));
         scroll = Math.min(scroll, maxScroll);
+        if (selected >= rows.size()) selected = nextSelectable(rows.size(), -1);
     }
 
     private record Agg(ItemKey key, String name, int total, Map<ContainerEntry, Integer> where, long newest) {}
@@ -392,6 +489,56 @@ public final class SearchScreen extends Screen {
         }
     }
 
+    private void buildCondense() {
+        var condenser = WarehouseClient.condenser();
+        List<dev.warehouse.organizer.Condenser.ZoneReport> reports = condenser.reports();
+        int zonesLow = 0, totalFreed = 0;
+        for (var r : reports) {
+            if (r.suggestions().isEmpty() && !r.lowOnSpace()) continue;
+            if (r.lowOnSpace()) zonesLow++;
+            totalFreed += r.totalSlotsFreed();
+            String state = r.lowOnSpace() ? "low on space" : "ok";
+            String detail = r.slotsUsed() + "/" + r.slotsTotal() + " slots used, " + state
+                    + (r.suggestions().isEmpty() ? "; nothing worth packing" : "; packing " + r.suggestions().size() + " item type(s) would free " + r.totalSlotsFreed() + " slots");
+            rows.add(new Row(null, r.zone() + "  " + r.percent() + "% full", detail, "", r.lowOnSpace() ? 0xFFFFD040 : 0xFF80FF80, null, List.of(), true));
+            for (var sg : r.suggestions()) {
+                List<Component> tip = new ArrayList<>();
+                tip.add(Component.literal(sg.displayName()).withStyle(ChatFormatting.WHITE));
+                tip.add(Component.literal(sg.key().asString()).withStyle(ChatFormatting.DARK_GRAY));
+                tip.add(Component.literal(sg.slotsNow() + " slots across " + sg.sources().size() + " chest(s) → " + sg.shulkersNeeded() + " shulker box" + (sg.shulkersNeeded() == 1 ? "" : "es") + ", frees " + sg.slotsFreed() + " slots").withStyle(ChatFormatting.GRAY));
+                int shown = 0;
+                for (ContainerEntry e : sg.sources()) {
+                    if (shown++ >= 6) {
+                        tip.add(Component.literal("  ...").withStyle(ChatFormatting.DARK_GRAY));
+                        break;
+                    }
+                    tip.add(Component.literal("  " + e.label() + "  " + sg.slotsPerSource().getOrDefault(e.id, 0) + " slot(s)").withStyle(Staleness.formatting(e.lastSeenEpochMs)));
+                }
+                if (sg.putBack() != null) tip.add(Component.literal("Then put the shulker back in " + sg.putBack().label()).withStyle(ChatFormatting.GREEN));
+                tip.add(Component.literal("Click: highlight those chests. Shift-click: only the biggest one.").withStyle(ChatFormatting.DARK_GRAY));
+                String where = sg.sources().isEmpty() ? "" : sg.sources().get(0).posString() + (sg.sources().size() > 1 ? "  (+" + (sg.sources().size() - 1) + " more)" : "");
+                rows.add(new Row(icon(sg.key()), sg.displayName(), sg.slotsNow() + " slots → " + sg.shulkersNeeded() + " shulker" + (sg.shulkersNeeded() == 1 ? "" : "s") + ", frees " + sg.slotsFreed() + "   " + where,
+                        "×" + sg.total(), 0xFFE0C060, shift -> {
+                    int secs = ConfigIO.get().highlightSeconds;
+                    List<ContainerEntry> targets = shift ? sg.sources().subList(0, Math.min(1, sg.sources().size())) : sg.sources();
+                    for (ContainerEntry e : targets) {
+                        WarehouseClient.highlights().containerForItem(e, sg.key(), ConfigIO.get().highlightColor, secs, sg.displayName() + "  " + sg.slotsPerSource().getOrDefault(e.id, 0) + " slot(s)", e == targets.get(0), "condense");
+                    }
+                    if (sg.putBack() != null && !targets.contains(sg.putBack())) WarehouseClient.highlights().container(sg.putBack(), 0xFF60FF80, secs, "put shulker here", false, "condense");
+                    Chat.info("Highlighted " + targets.size() + " chest(s) holding " + sg.displayName() + ". Pack it into " + sg.shulkersNeeded() + " shulker" + (sg.shulkersNeeded() == 1 ? "" : "s") + (sg.putBack() != null ? " and put it back in " + sg.putBack().label() : "") + ".");
+                    onClose();
+                }, tip, false));
+            }
+        }
+        if (rows.isEmpty()) {
+            rows.add(new Row(null, "Nothing worth packing into shulkers", "Zones are under " + ConfigIO.get().condenseAtFillPercent + "% full or no item takes up " + ConfigIO.get().condenseMinStacks + "+ slots.", "", 0xFFFFFFFF, null, List.of(), true));
+        }
+        int carried = minecraft != null ? condenser.emptyShulkersInInventory(minecraft) : 0;
+        var stored = condenser.emptyShulkersIndexed();
+        footer = zonesLow + " zone(s) low on space, " + totalFreed + " slots recoverable   |   empty shulkers: " + carried + " on you, " + stored.count() + " indexed"
+                + (stored.where() != null && stored.count() > 0 ? " (" + stored.where().posString() + ")" : "");
+    }
+
     private static @Nullable ItemStack icon(ItemKey key) {
         return CategoryResolver.sampleStack(key);
     }
@@ -410,11 +557,18 @@ public final class SearchScreen extends Screen {
         g.enableScissor(listLeft, listTop, listRight, listBottom);
         int y = listTop - scroll;
         Row hovered = null;
-        for (Row r : rows) {
+        int selectedY = Integer.MIN_VALUE;
+        for (int idx = 0; idx < rows.size(); idx++) {
+            Row r = rows.get(idx);
             if (y + ROW_H >= listTop && y <= listBottom) {
                 boolean hover = mouseX >= listLeft && mouseX < listRight && mouseY >= Math.max(y, listTop) && mouseY < Math.min(y + ROW_H, listBottom);
                 if (hover && r.onClick != null) g.fill(listLeft, y, listRight, y + ROW_H, 0x40FFFFFF);
                 if (r.header) g.fill(listLeft, y, listRight, y + ROW_H, 0x30FFFFFF);
+                if (listFocused && idx == selected) {
+                    g.fill(listLeft, y, listRight, y + ROW_H, 0x50FFFFFF);
+                    g.outline(listLeft, y, listRight - listLeft, ROW_H, 0xFFFFFFFF);
+                    selectedY = y;
+                }
                 int x = listLeft + 4;
                 if (r.icon != null) {
                     g.item(r.icon, x, y + 2);
@@ -432,6 +586,9 @@ public final class SearchScreen extends Screen {
         g.disableScissor();
         if (rows.isEmpty()) g.text(getFont(), tab == Tab.SEARCH && lastQuery.isEmpty() ? "Nothing indexed yet. Open chests inside a region." : "No results.", listLeft + 6, listTop + 6, 0xFF909090);
         if (hovered != null && !hovered.tooltip.isEmpty()) g.setComponentTooltipForNextFrame(getFont(), hovered.tooltip, mouseX, mouseY);
+        else if (listFocused && selectedY != Integer.MIN_VALUE && selected >= 0 && selected < rows.size() && !rows.get(selected).tooltip.isEmpty()) {
+            g.setComponentTooltipForNextFrame(getFont(), rows.get(selected).tooltip, listLeft + 240, Math.max(listTop, Math.min(selectedY, listBottom - ROW_H)) + ROW_H);
+        }
         g.text(getFont(), footer, 20, height - 16, 0xFFA0A0A0);
     }
 
@@ -442,6 +599,7 @@ public final class SearchScreen extends Screen {
         if (mx >= listLeft && mx < listRight && my >= listTop && my < listBottom) {
             int idx = (int) ((my - listTop + scroll) / ROW_H);
             if (idx >= 0 && idx < rows.size() && rows.get(idx).onClick != null) {
+                selected = idx;
                 rows.get(idx).onClick.run(event.hasShiftDown());
                 return true;
             }
