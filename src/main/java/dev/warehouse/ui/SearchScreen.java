@@ -199,7 +199,7 @@ public final class SearchScreen extends Screen {
     }
 
     public int rowCount() {
-        return rows.size();
+        return rows == null ? 0 : rows.size(); // null while the Screen base constructor runs
     }
 
     public int selectedRow() {
@@ -209,7 +209,7 @@ public final class SearchScreen extends Screen {
     /** Move keyboard/controller focus into or out of the result list. Entering selects the first clickable row. */
     public void setListFocused(boolean focused) {
         listFocused = focused;
-        if (focused) {
+        if (focused && rows != null) {
             clearFocus();
             if (selected < 0 || selected >= rows.size() || rows.get(selected).onClick == null) selected = nextSelectable(-1, 1);
             ensureSelectedVisible();
@@ -218,7 +218,7 @@ public final class SearchScreen extends Screen {
 
     /** Move the selection by {@code delta} clickable rows. Returns false when already at the end. */
     public boolean moveSelection(int delta) {
-        if (!listFocused || rows.isEmpty()) return false;
+        if (!listFocused || rows == null || rows.isEmpty()) return false;
         int next = nextSelectable(selected, delta < 0 ? -1 : 1);
         if (next < 0) return false;
         for (int i = 1; i < Math.abs(delta); i++) {
