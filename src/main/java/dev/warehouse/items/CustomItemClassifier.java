@@ -43,10 +43,17 @@ public final class CustomItemClassifier {
     private static final java.util.Set<String> PLUGIN_MARKERS = java.util.Set.of("minecraft:custom_data", "minecraft:custom_model_data", "minecraft:item_model");
 
     private static final Map<String, Result> CACHE = new HashMap<>();
+    /** Server key the rules' optional {@code server} filter is matched against; null outside a game. */
+    private static volatile @Nullable String currentServer;
 
     private CustomItemClassifier() {}
 
     public static void clearCache() {
+        CACHE.clear();
+    }
+
+    public static void setServer(@Nullable String server) {
+        currentServer = server;
         CACHE.clear();
     }
 
@@ -102,6 +109,12 @@ public final class CustomItemClassifier {
             // No sample (older data): treat obviously vanilla groups as vanilla, the rest as plugin items.
             pluginMarked = !(name.equals("enchanted book") || name.contains("potion") || name.contains("arrow") || name.endsWith("shulker box"));
         }
+
+        // 0. Data-driven rules (jar defaults, config file, shared folder) win over everything below.
+        CustomItemRules.Context ctx = new CustomItemRules.Context(key.itemId, name, lore, pluginId, crateKeyId,
+                CustomItemRules.keyPaths(comps != null ? obj(comps.get("minecraft:custom_data")) : null), pluginMarked, baseCategory, baseFamily, currentServer);
+        CustomItemRules.Rule rule = CustomItemRules.match(ctx);
+        if (rule != null) return new Result(rule.category, CustomItemRules.family(rule, ctx, packPrefix(pluginId)), false, "rule " + rule.id);
 
         // 1. Vanilla variants keep their base category.
         if (!pluginMarked) return new Result(baseCategory, baseFamily, true, "vanilla variant");

@@ -66,7 +66,20 @@ public final class CategoryResolver {
     }
 
     public String categoryOf(ItemStack stack) {
-        return categoryOf(Fingerprinter.key(stack), NestedContents.of(stack));
+        ItemKey key = Fingerprinter.key(stack);
+        learn(stack, key);
+        return categoryOf(key, NestedContents.of(stack));
+    }
+
+    /**
+     * Register a plugin item seen in the player's hand or inventory so its display name and components are known before it
+     * ever sits in a chest. Without this a fresh fingerprint classifies as a plain vanilla variant until it is indexed.
+     */
+    public void learn(ItemStack stack, ItemKey key) {
+        if (stack.isEmpty() || key.isVanilla() || groups.groupFor(key) != null) return;
+        groups.record(stack, key);
+        cache.remove(key);
+        subFamilyCache.remove(key);
     }
 
     public String subFamilyOf(ItemKey key) {

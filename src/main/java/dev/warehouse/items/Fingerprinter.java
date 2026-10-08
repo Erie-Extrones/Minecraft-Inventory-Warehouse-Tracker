@@ -16,6 +16,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 
 import java.nio.charset.StandardCharsets;
@@ -37,6 +39,8 @@ import java.util.regex.PatternSyntaxException;
 public final class Fingerprinter {
     private static Set<Identifier> stripSet;
     private static List<Pattern> lorePatterns;
+    private static List<String[]> customDataPaths;
+    private static List<String> cachedCustomDataSource;
     private static List<String> cachedStripSource;
     private static List<String> cachedLoreSource;
 
@@ -74,6 +78,18 @@ public final class Fingerprinter {
                 patch = work.getComponentsPatch();
             }
         }
+        CustomData customData = work.get(DataComponents.CUSTOM_DATA);
+        if (customData != null && !customData.isEmpty() && !customDataPaths.isEmpty()) {
+            CompoundTag tag = customData.copyTag();
+            boolean changed = false;
+            for (String[] path : customDataPaths) changed |= removePath(tag, path, 0);
+            if (changed) {
+                if (work == stack) work = stack.copy();
+                if (tag.isEmpty()) work.remove(DataComponents.CUSTOM_DATA);
+                else work.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                patch = work.getComponentsPatch();
+            }
+        }
         patch = patch.forget(Fingerprinter::isStripped);
         if (patch.isEmpty()) return new ItemKey(id, "");
 
@@ -91,6 +107,20 @@ public final class Fingerprinter {
         }
     }
 
+    /** Remove a nested key from a compound tag; empty parents are dropped too. Returns true if anything was removed. */
+    private static boolean removePath(CompoundTag tag, String[] path, int i) {
+        String seg = path[i];
+        if (i == path.length - 1) return tag.remove(seg) != null;
+        CompoundTag child = tag.getCompound(seg).orElse(null);
+        if (child == null) return false;
+        boolean removed = removePath(child, path, i + 1);
+        if (removed) {
+            if (child.isEmpty()) tag.remove(seg);
+            else tag.put(seg, child);
+        }
+        return removed;
+    }
+
     private static boolean isStripped(DataComponentType<?> type) {
         Identifier k = BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(type);
         return k != null && stripSet.contains(k);
@@ -106,6 +136,15 @@ public final class Fingerprinter {
             }
             stripSet = s;
             cachedStripSource = cfg.strippedComponents;
+        }
+        if (customDataPaths == null || cachedCustomDataSource != cfg.strippedCustomDataPaths) {
+            List<String[]> ps = new ArrayList<>();
+            if (cfg.strippedCustomDataPaths != null) for (String p : cfg.strippedCustomDataPaths) {
+                if (p == null || p.isBlank()) continue;
+                ps.add(p.split("/"));
+            }
+            customDataPaths = ps;
+            cachedCustomDataSource = cfg.strippedCustomDataPaths;
         }
         if (lorePatterns == null || cachedLoreSource != cfg.strippedLorePatterns) {
             List<Pattern> ps = new ArrayList<>();

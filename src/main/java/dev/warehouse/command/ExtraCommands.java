@@ -86,6 +86,23 @@ public final class ExtraCommands {
                                     return 1;
                                 })))));
 
+        root.then(literal("rules")
+                .then(literal("reload").executes(c -> {
+                    WarehouseClient.manifestExporter().reloadRules(true);
+                    return 1;
+                }))
+                .then(literal("list").executes(c -> {
+                    var rules = dev.warehouse.items.CustomItemRules.active();
+                    Chat.info(rules.size() + " custom item rule(s) (highest priority first):");
+                    for (var r : rules) Chat.send(Component.literal("  " + dev.warehouse.items.CustomItemRules.describe(r) + "  [" + dev.warehouse.items.CustomItemRules.sourceOf(r) + "]").withStyle(ChatFormatting.GRAY));
+                    Chat.send(Component.literal("  Files: " + dev.warehouse.export.ManifestExporter.configRulesFile() + (dev.warehouse.export.ManifestExporter.sharedRulesFile() != null ? ", " + dev.warehouse.export.ManifestExporter.sharedRulesFile() : " (no shared folder set)")).withStyle(ChatFormatting.DARK_GRAY));
+                    return 1;
+                })));
+        root.then(literal("manifest")
+                .then(literal("export").executes(c -> {
+                    WarehouseClient.manifestExporter().export(true);
+                    return 1;
+                })));
         root.then(literal("debug")
                 .then(literal("index").executes(c -> debugIndex(false)))
                 .then(literal("index").then(literal("full").executes(c -> debugIndex(true))))

@@ -66,3 +66,11 @@ publishing {
     repositories {
     }
 }
+
+// Offline check of custom item rules against an exported manifest (no Minecraft needed at runtime).
+tasks.register('rulesDryRun', JavaExec) {
+    group = 'verification'
+    description = 'Classify every group of a manifest with a rules file: ./gradlew rulesDryRun --args="manifest.json custom_item_rules.json [--all]"'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.warehouse.tools.RulesDryRun'
+}

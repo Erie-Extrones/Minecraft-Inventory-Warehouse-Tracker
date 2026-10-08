@@ -97,6 +97,33 @@ Controlify already turns the mod's keys into controller bindings and can click t
 
 The add-on builds from the `controlify-addon` folder and is published with each release.
 
+## Tuning custom item sorting without a new jar
+
+Plugin items are classified by the rules in `custom_item_rules.json`. The jar ships defaults; `config/warehouse/custom_item_rules.json` overrides them, and a copy in the shared folder (below) overrides both, matched by rule id. A rule matches when every field it gives matches, as case-insensitive regexes:
+
+```json
+{ "id": "ei-infinite-blocks", "priority": 100, "note": "why",
+  "match": { "pluginId": "^(GLASS|CONCRETE)_", "name": "...", "lore": "...", "itemId": "...", "customDataKey": "...", "crateKey": true, "pluginMarked": true },
+  "category": "Infinite Items", "family": "$base" }
+```
+
+`family` is a literal, `$base` (the base item's family such as its colour or wood type) or `$pack` (the plugin pack prefix). `/warehouse rules list` shows what is active and where each rule came from; `/warehouse rules reload` picks up edits, and both files are also watched while you play.
+
+Two things keep this unobtrusive:
+
+- **Stable fingerprints.** Plugins stamp per-copy ids and counters into an item's custom data (ExecutableItems' `ei-disablestack` UUID and usage score, for example), which would give every copy its own fingerprint and a wrong first guess. `strippedCustomDataPaths` in the config lists the paths removed before hashing. Items in your hand are also registered on sight, so a fresh fingerprint is read by name before the guide sends you anywhere.
+- **Custom items stay put.** When a rule changes where a plugin item belongs, copies already sitting in a planned chest keep that chest as their home and are never flagged misplaced (`customItemsStayPut`). Only new copies follow the new rule.
+
+### Shared folder and the manifest
+
+Set `sharedDir` in the config to a folder synced by Google Drive, Dropbox or similar. The mod then writes `warehouse-manifest-<server>.json` there every `manifestExportIntervalMinutes` (also `/warehouse manifest export`): every custom item group with its samples, how it currently classifies and why, and where it is stored. Anything that edits `custom_item_rules.json` in that folder, a person or a scheduled Claude session, changes sorting the next time the mod reloads rules. Check a rules file against a manifest before using it:
+
+```
+./gradlew rulesDryRun --args="warehouse-manifest-server.json custom_item_rules.json --all"
+```
+
+It prints each group's category before and after, without starting Minecraft.
+
 ## Export and import
 
 `/warehouse export [name]` writes everything for the current server to `config/warehouse/exports/<name>.json` (gzipped above 5 MB). Copy the file to another PC and run `/warehouse import <file>` to merge, or `/warehouse import <file> replace` to wipe and load. The Plan tab also has an **Export** button.
@@ -111,6 +138,7 @@ The add-on builds from the `controlify-addon` folder and is published with each 
 /warehouse guide [on|off]
 /warehouse search [query]      /warehouse misplaced      /warehouse lost      /warehouse unsorted
 /warehouse condense [list]     (what to pack into shulkers when a zone is low on space)
+/warehouse rules list | reload   /warehouse manifest export
 /warehouse plan run | replan | accept | reject | show | clear | count <n> | preview [on|off]
 /warehouse plan override here | clear
 /warehouse plan category <item or group> <category>
@@ -138,7 +166,8 @@ The add-on builds from the `controlify-addon` folder and is published with each 
 
 ```
 config/warehouse/
-  config.json              global settings: wand, colors, particle guide, prior zone shares, essentials rules, strip lists
+  config.json              global settings: wand, colors, particle guide, prior zone shares, essentials rules, strip lists, shared folder
+  custom_item_rules.json   your overrides for plugin item sorting (optional)
   <server-key>/            one folder per server address, or sp-<world> for singleplayer
     regions.json  claims.json  index.json  items.json  plan.json  lost.json
   exports/                 export bundles

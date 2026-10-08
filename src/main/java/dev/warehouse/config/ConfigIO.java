@@ -66,6 +66,11 @@ public final class ConfigIO {
             ModConfig.defaultPriorShares().forEach((k, v) -> c.categoryPriorShares.putIfAbsent(k, v));
             c.configVersion = 3;
         }
+        if (c.configVersion < 4) {
+            if (c.strippedCustomDataPaths == null) c.strippedCustomDataPaths = new java.util.ArrayList<>();
+            for (String path : ModConfig.defaultStrippedCustomDataPaths()) if (!c.strippedCustomDataPaths.contains(path)) c.strippedCustomDataPaths.add(path);
+            c.configVersion = 4;
+        }
     }
 
     public static synchronized void save() {
