@@ -25,9 +25,20 @@ import net.minecraft.network.chat.MutableComponent;
  */
 public final class SearchScreenProcessor extends ScreenProcessor<SearchScreen> {
 
+    /** Set once the screen has been initialised; the processor is constructed from the Screen base constructor, before the screen's own fields exist. */
+    private boolean started;
+
     public SearchScreenProcessor(SearchScreen screen) {
         super(screen);
-        if (controllerMode()) enterList();
+    }
+
+    @Override
+    public void onControllerUpdate(ControllerEntity controller) {
+        if (!started) {
+            started = true;
+            if (controllerMode()) enterList();
+        }
+        super.onControllerUpdate(controller);
     }
 
     private static boolean controllerMode() {
