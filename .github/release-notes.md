@@ -12,6 +12,7 @@ Client-only Fabric mod that remembers where your items live, decides which chest
 - 23 categories including Colored Blocks, Workstations, Enchanting, Keys & Currency, Infinite Items and Collectibles; plugin items (ExecutableItems, ExcellentCrates, ItemsAdder, MMOItems) are recognised and grouped by pack.
 - Lost log for drops and deaths, export/import between PCs, chests that disappear are forgotten automatically.
 - **Condense** tab: when a zone runs low on slots the mod suggests which bulk items to pack into shulker boxes, how many slots that frees, and which chest the packed shulker goes back into.
+- Plugin items get stable fingerprints (per-copy ids stripped), are recognised on sight in your hand, and keep their chest when a rule moves them. Sorting rules for plugin items live in `custom_item_rules.json` and reload without a new jar; a shared-folder manifest export lets external tooling tune them.
 - **Controller support** via the separate `warehouse-controlify` jar (needs [Controlify](https://modrinth.com/mod/controlify)): d-pad/stick navigation of the warehouse screen, bumpers switch tabs, warehouse actions as proper controller bindings and radial-menu entries.
 
 ### Getting started

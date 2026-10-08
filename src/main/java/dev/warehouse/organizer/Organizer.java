@@ -193,7 +193,12 @@ public final class Organizer {
     /** Resolution for a stack, honouring shulker contents. */
     public @Nullable Resolution resolve(ItemStack stack) {
         if (stack.isEmpty()) return null;
-        return resolve(dev.warehouse.items.Fingerprinter.key(stack), dev.warehouse.items.NestedContents.of(stack));
+        ItemKey key = dev.warehouse.items.Fingerprinter.key(stack);
+        if (!key.isVanilla() && categories.groupFor(key) == null) {
+            categories.learn(stack, key);
+            resolveCache.remove(key);
+        }
+        return resolve(key, dev.warehouse.items.NestedContents.of(stack));
     }
 
     public @Nullable Resolution resolve(ItemKey key, @Nullable List<StackRecord> nested) {
@@ -214,6 +219,20 @@ public final class Organizer {
         if (ov != null) {
             ContainerEntry e = index.byId(ov);
             if (e != null) return new Resolution(e, plan.zoneOf(e.id) != null ? plan.zoneOf(e.id) : categories.categoryOf(key, nested), "override");
+        }
+        // Plugin items stay where they already live: a rule or classifier change must not turn a sorted warehouse into misplaced work.
+        if (!key.isVanilla() && dev.warehouse.config.ConfigIO.get().customItemsStayPut) {
+            ContainerEntry withRoom = null, any = null;
+            for (ContainerEntry e : index.holding(key)) {
+                if (plan.zoneOf(e.id) == null) continue;
+                if (any == null) any = e;
+                if (e.freeSlots() > 0 || hasPartialStack(e, key)) {
+                    withRoom = e;
+                    break;
+                }
+            }
+            ContainerEntry home = withRoom != null ? withRoom : any;
+            if (home != null) return new Resolution(home, plan.zoneOf(home.id), withRoom != null ? "stays put" : "stays put (full)");
         }
         String cat = categories.categoryOf(key, nested);
         Zone zone = plan.zones.get(cat);

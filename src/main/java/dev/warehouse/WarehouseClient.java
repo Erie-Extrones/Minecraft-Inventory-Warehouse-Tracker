@@ -71,6 +71,7 @@ public final class WarehouseClient implements ClientModInitializer {
     private HeldItemGuide heldItemGuide;
     private GuidePath guidePath;
     private dev.warehouse.organizer.Condenser condenser;
+    private dev.warehouse.export.ManifestExporter manifestExporter;
     private StaleContainerSweeper staleSweeper;
 
     public static WarehouseClient get() {
@@ -161,6 +162,10 @@ public final class WarehouseClient implements ClientModInitializer {
         return instance.condenser;
     }
 
+    public static dev.warehouse.export.ManifestExporter manifestExporter() {
+        return instance.manifestExporter;
+    }
+
     public static HeldItemGuide heldItemGuide() {
         return instance.heldItemGuide;
     }
@@ -195,6 +200,8 @@ public final class WarehouseClient implements ClientModInitializer {
         lostLog = new LostLog(storage.lost);
         clearMode = new ClearInventoryMode();
         exporter = new dev.warehouse.export.Exporter(storage);
+        manifestExporter = new dev.warehouse.export.ManifestExporter();
+        storage.onBind(manifestExporter::onBind);
         importer = new dev.warehouse.export.Importer(storage);
         inventoryTracker = new InventoryTracker();
         heldItemGuide = new HeldItemGuide();
@@ -275,6 +282,7 @@ public final class WarehouseClient implements ClientModInitializer {
         guidePath.tick(mc);
         inventoryTracker.tick(mc);
         condenser.tick(mc);
+        manifestExporter.tick(mc);
         if (mc.level.getGameTime() % 20 == 0) lostLog.expire();
         storage.tick();
     }

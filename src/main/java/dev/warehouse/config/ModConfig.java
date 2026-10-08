@@ -9,7 +9,7 @@ import java.util.Map;
 /** Global, server-independent configuration. Persisted to config/warehouse/config.json. */
 public final class ModConfig {
     /** Bumped when defaults change so ConfigIO can migrate saved files. */
-    public int configVersion = 3;
+    public int configVersion = 4;
 
     /** Item id held in main hand to draw warehouse regions. */
     public String wandItem = "minecraft:dead_brain_coral";
@@ -71,6 +71,11 @@ public final class ModConfig {
     // ---- Custom item fingerprinting ----
     /** Keep a full component sample per custom-item variant in items.json (for tuning the strip lists and planner). */
     public boolean collectItemSamples = true;
+    /**
+     * Paths inside minecraft:custom_data removed before hashing, "/"-separated. Plugins stamp per-item ids and counters here
+     * (ExecutableItems' ei-disablestack UUID, usage scores) that would otherwise give every copy its own fingerprint.
+     */
+    public List<String> strippedCustomDataPaths = new ArrayList<>(defaultStrippedCustomDataPaths());
     /** Data component ids stripped before hashing (volatile / noise). */
     public List<String> strippedComponents = new ArrayList<>(Arrays.asList(
             "minecraft:damage",
@@ -87,6 +92,27 @@ public final class ModConfig {
             "(?i)^\\s*bound to\\s*[:：]?.*$",
             "(?i)^\\s*soulbound.*$"
     ));
+
+    public static List<String> defaultStrippedCustomDataPaths() {
+        return Arrays.asList(
+                "PublicBukkitValues/executableitems:ei-disablestack",
+                "PublicBukkitValues/score:usage",
+                "PublicBukkitValues/executableitems:usage",
+                "PublicBukkitValues/executableitems:ei-owner",
+                "PublicBukkitValues/executableitems:ei-stored-variables"
+        );
+    }
+
+    // ---- Sharing with tooling ----
+    /**
+     * Folder (absolute, or relative to the game directory) that receives the item manifest and is watched for custom_item_rules.json.
+     * Point it at a synced folder (Google Drive, Dropbox...) to let an external tool tune custom item sorting. Empty = off.
+     */
+    public String sharedDir = "";
+    /** Minutes between manifest exports to the shared folder while connected. */
+    public int manifestExportIntervalMinutes = 60;
+    /** Keep plugin items where they already are when their category changes, instead of marking them misplaced. */
+    public boolean customItemsStayPut = true;
 
     // ---- Organizer ----
     /** Slot headroom multiplier when estimating category volume. */

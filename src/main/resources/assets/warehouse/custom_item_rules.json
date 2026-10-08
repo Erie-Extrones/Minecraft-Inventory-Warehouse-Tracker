@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "note": "Default classification rules for plugin items. Copy to config/warehouse/custom_item_rules.json (or the shared folder) to override; later files win by rule id. Match fields are case-insensitive regexes and all given fields must match. family: literal, $base (base item family such as the colour or wood type) or $pack (plugin pack prefix).",
+  "rules": [
+    {
+      "id": "ei-infinite-blocks",
+      "priority": 100,
+      "note": "ExecutableItems infinite glass and concrete, filed by colour next to the other infinite blocks.",
+      "match": { "pluginId": "^(GLASS|CONCRETE)_" },
+      "category": "Infinite Items",
+      "family": "$base"
+    },
+    {
+      "id": "infinite-by-name",
+      "priority": 90,
+      "note": "Anything calling itself infinite, unlimited or endless.",
+      "match": { "name": "infinite|unlimited|endless", "pluginMarked": true },
+      "category": "Infinite Items",
+      "family": "$base"
+    },
+    {
+      "id": "cycler-tools",
+      "priority": 85,
+      "note": "Block cyclers (slab/stair/colour cyclers) behave like infinite blocks.",
+      "match": { "name": "cycler", "pluginMarked": true },
+      "category": "Infinite Items",
+      "family": "$base"
+    }
+  ]
+}
