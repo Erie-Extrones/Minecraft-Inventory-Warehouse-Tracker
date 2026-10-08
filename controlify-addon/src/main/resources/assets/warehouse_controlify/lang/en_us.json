@@ -1,0 +1,15 @@
+{
+  "warehouse_controlify.category": "Warehouse",
+  "controlify.binding.warehouse_controlify.open_search": "Open warehouse search",
+  "controlify.binding.warehouse_controlify.open_search.desc": "Opens the Warehouse screen (search, misplaced, plan, condense).",
+  "controlify.binding.warehouse_controlify.find_held_item": "Find held item",
+  "controlify.binding.warehouse_controlify.find_held_item.desc": "Highlights the chest where the item in your hand is stored or belongs.",
+  "controlify.binding.warehouse_controlify.clear_inventory_mode": "Toggle clear-inventory mode",
+  "controlify.binding.warehouse_controlify.clear_inventory_mode.desc": "Starts or stops the numbered route that empties your inventory into the right chests.",
+  "controlify.binding.warehouse_controlify.toggle_outlines": "Toggle region outlines",
+  "controlify.binding.warehouse_controlify.toggle_outlines.desc": "Shows or hides the Warehouse region boxes in the world.",
+  "controlify.binding.warehouse_controlify.take_misplaced": "Take misplaced",
+  "controlify.binding.warehouse_controlify.take_misplaced.desc": "In an indexed chest: quick-move every stack that belongs in another zone into your inventory.",
+  "controlify.binding.warehouse_controlify.deposit_matching": "Deposit matching",
+  "controlify.binding.warehouse_controlify.deposit_matching.desc": "In an indexed chest: quick-move every inventory stack that belongs in this chest."
+}

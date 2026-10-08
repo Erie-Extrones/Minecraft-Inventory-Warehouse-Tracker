@@ -123,6 +123,22 @@ public final class ContainerOverlay {
         }
     }
 
+    /** Quick-move every misplaced stack of the open container into the inventory. Returns false if no tracked container is open. */
+    public static boolean takeMisplaced(Minecraft mc) {
+        ScreenTracker.Session s = WarehouseClient.screenTracker().session();
+        if (s == null || s.entry == null) return false;
+        takeMisplaced(mc, s);
+        return true;
+    }
+
+    /** Quick-move every inventory stack that belongs in the open container. Returns false if no tracked container is open. */
+    public static boolean depositMatching(Minecraft mc) {
+        ScreenTracker.Session s = WarehouseClient.screenTracker().session();
+        if (s == null || s.entry == null) return false;
+        depositMatching(mc, s);
+        return true;
+    }
+
     private static void takeMisplaced(Minecraft mc, ScreenTracker.Session s) {
         if (mc.player == null || mc.gameMode == null) return;
         Set<Integer> misplaced = misplacedSlots(s);

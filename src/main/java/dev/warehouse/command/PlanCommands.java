@@ -102,6 +102,8 @@ public final class PlanCommands {
             return 1;
         })));
         root.then(literal("misplaced").executes(c -> openTab(c.getSource().getClient(), SearchScreen.Tab.MISPLACED)));
+        root.then(literal("condense").executes(c -> openTab(c.getSource().getClient(), SearchScreen.Tab.CONDENSE))
+                .then(literal("list").executes(c -> condenseList(c.getSource().getClient()))));
         root.then(literal("lost").executes(c -> openTab(c.getSource().getClient(), SearchScreen.Tab.LOST)));
         root.then(literal("unsorted").executes(c -> openTab(c.getSource().getClient(), SearchScreen.Tab.UNSORTED)));
         root.then(literal("clearmode").executes(c -> {
@@ -138,6 +140,32 @@ public final class PlanCommands {
         dev.warehouse.config.ConfigIO.get().heldItemGuide = on;
         dev.warehouse.config.ConfigIO.save();
         Chat.info("Held-item guide " + (on ? "on" : "off") + ".");
+        return 1;
+    }
+
+    private static int condenseList(Minecraft mc) {
+        var condenser = WarehouseClient.condenser();
+        var reports = condenser.reports();
+        if (reports.isEmpty()) {
+            Chat.info("Nothing worth packing into shulkers right now.");
+            return 1;
+        }
+        for (var r : reports) {
+            Chat.send(Chat.prefix().append(Component.literal(r.zone() + "  " + r.percent() + "% full" + (r.lowOnSpace() ? "  (low on space)" : ""))
+                    .withStyle(r.lowOnSpace() ? ChatFormatting.YELLOW : ChatFormatting.WHITE)));
+            int shown = 0;
+            for (var s : r.suggestions()) {
+                if (shown++ >= 5) {
+                    Chat.send(Component.literal("  ... " + (r.suggestions().size() - 5) + " more in /warehouse condense").withStyle(ChatFormatting.DARK_GRAY));
+                    break;
+                }
+                Chat.send(Component.literal("  " + s.displayName() + "  ×" + s.total() + "  " + s.slotsNow() + " slots → " + s.shulkersNeeded() + " shulker" + (s.shulkersNeeded() == 1 ? "" : "s")
+                        + ", frees " + s.slotsFreed() + (s.putBack() != null ? "; put it back in " + s.putBack().label() : "")).withStyle(ChatFormatting.GRAY));
+            }
+        }
+        int carried = condenser.emptyShulkersInInventory(mc);
+        var stored = condenser.emptyShulkersIndexed();
+        Chat.send(Component.literal("  Empty shulkers: " + carried + " on you, " + stored.count() + " indexed" + (stored.where() != null && stored.count() > 0 ? " (most in " + stored.where().label() + ")" : "")).withStyle(ChatFormatting.DARK_GRAY));
         return 1;
     }
 

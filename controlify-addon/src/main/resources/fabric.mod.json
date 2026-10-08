@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "warehouse_controlify",
+  "version": "${version}",
+  "name": "Warehouse: Controlify",
+  "description": "Controller support for the Warehouse mod: navigate the warehouse screen with a gamepad, bind warehouse actions, radial menu entries.",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.warehouse.controlify.WarehouseControlify"
+    ],
+    "controlify": [
+      "dev.warehouse.controlify.WarehouseControlify"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*",
+    "warehouse": "*",
+    "controlify": ">=3.5.0"
+  }
+}
