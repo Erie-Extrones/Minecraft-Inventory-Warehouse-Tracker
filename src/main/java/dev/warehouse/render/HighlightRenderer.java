@@ -80,6 +80,10 @@ public final class HighlightRenderer {
         active.removeIf(h -> group.equals(h.group));
     }
 
+    public void removeContainer(String group, UUID containerId) {
+        active.removeIf(h -> group.equals(h.group) && containerId.equals(h.containerId));
+    }
+
     public Highlight container(ContainerEntry e, int color, int seconds, @Nullable String label, boolean line, @Nullable String group) {
         AABB box = null;
         if (!e.kind.isEntity()) {

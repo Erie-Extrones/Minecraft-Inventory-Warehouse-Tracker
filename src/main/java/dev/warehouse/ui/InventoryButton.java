@@ -24,7 +24,7 @@ public final class InventoryButton {
         if (!(screen instanceof InventoryScreen inv) || !ConfigIO.get().inventoryButton) return;
         if (WarehouseClient.get() == null || !WarehouseClient.storage().isBound()) return;
         AbstractContainerScreenAccessor acc = (AbstractContainerScreenAccessor) inv;
-        Button button = Button.builder(Component.literal("Warehouse"), b -> mc.gui.setScreen(new SearchScreen()))
+        Button button = Button.builder(Component.literal("Warehouse"), b -> SearchScreen.open(mc))
                 .bounds(acc.warehouse$leftPos() + acc.warehouse$imageWidth() - 64, Math.max(0, acc.warehouse$topPos() - 16), 64, 14)
                 .tooltip(Tooltip.create(Component.literal("Open the Warehouse search, lost log, misplaced list and plan")))
                 .build();

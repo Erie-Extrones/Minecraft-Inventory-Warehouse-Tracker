@@ -85,7 +85,35 @@ public final class Importer {
             storage.items.set(items);
             storage.plan.set(plan != null ? plan : Plan.empty());
             if (root.has("lost")) storage.lost.set(lost);
+            if (root.has("prices")) storage.prices.set(list(root, "prices", new TypeToken<List<dev.warehouse.prices.PriceObservation>>() {}));
+            if (root.has("shops")) storage.shops.set(list(root, "shops", new TypeToken<List<dev.warehouse.shops.Shop>>() {}));
         } else {
+            if (root.has("prices")) {
+                List<dev.warehouse.prices.PriceObservation> cur = storage.prices.get();
+                for (dev.warehouse.prices.PriceObservation o : list(root, "prices", new TypeToken<List<dev.warehouse.prices.PriceObservation>>() {})) {
+                    boolean dup = cur.stream().anyMatch(x -> x.whenEpochMs == o.whenEpochMs && x.priceKey.equals(o.priceKey) && x.unitPrice == o.unitPrice && x.sell == o.sell);
+                    if (!dup) cur.add(o);
+                }
+                storage.prices.markDirty();
+            }
+            if (root.has("shops")) {
+                List<dev.warehouse.shops.Shop> cur = storage.shops.get();
+                for (dev.warehouse.shops.Shop in : list(root, "shops", new TypeToken<List<dev.warehouse.shops.Shop>>() {})) {
+                    dev.warehouse.shops.Shop local = cur.stream().filter(x -> x.regionId.equals(in.regionId)).findFirst().orElse(null);
+                    if (local == null) cur.add(in);
+                    else if (in.lastInventoryEpochMs > local.lastInventoryEpochMs) {
+                        in.sellPrices.forEach(local.sellPrices::putIfAbsent);
+                        in.restockMin.forEach(local.restockMin::putIfAbsent);
+                        cur.remove(local);
+                        in.sellPrices.putAll(local.sellPrices);
+                        cur.add(in);
+                    } else {
+                        in.sellPrices.forEach(local.sellPrices::putIfAbsent);
+                        in.restockMin.forEach(local.restockMin::putIfAbsent);
+                    }
+                }
+                storage.shops.markDirty();
+            }
             mergeRegions(regions);
             mergeClaims(claims);
             mergeIndex(index);

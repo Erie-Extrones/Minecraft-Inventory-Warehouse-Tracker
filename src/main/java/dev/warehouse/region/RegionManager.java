@@ -71,7 +71,7 @@ public final class RegionManager {
     }
 
     public String nextAutoName(RegionType type) {
-        String base = type == RegionType.WAREHOUSE ? "Warehouse " : "Claim ";
+        String base = type == RegionType.WAREHOUSE ? "Warehouse " : type == RegionType.SHOP ? "Shop " : "Claim ";
         int n = 1;
         while (true) {
             String candidate = base + n;
