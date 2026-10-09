@@ -32,6 +32,7 @@ public final class WarehouseCommands {
 
         // ---- regions ----
         root.then(literal("region")
+                .then(ShopCommands.regionType())
                 .then(literal("list").executes(c -> regionList(c)))
                 .then(literal("rename")
                         .then(argument("old", StringArgumentType.string())
@@ -109,6 +110,7 @@ public final class WarehouseCommands {
                 })));
 
         ExtraCommands.attach(root);
+        ShopCommands.attach(root);
         dispatcher.register(root);
     }
 

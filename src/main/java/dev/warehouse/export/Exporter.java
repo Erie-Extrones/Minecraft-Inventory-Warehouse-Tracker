@@ -42,6 +42,8 @@ public final class Exporter {
         root.add("items", GsonHolder.GSON.toJsonTree(storage.items.get()));
         root.add("plan", GsonHolder.GSON.toJsonTree(storage.plan.get()));
         if (includeLost) root.add("lost", GsonHolder.GSON.toJsonTree(storage.lost.get()));
+        root.add("prices", GsonHolder.GSON.toJsonTree(storage.prices.get()));
+        root.add("shops", GsonHolder.GSON.toJsonTree(storage.shops.get()));
         JsonObject cfg = new JsonObject();
         cfg.add("categoryOverrides", GsonHolder.GSON.toJsonTree(ConfigIO.get().categoryOverrides));
         cfg.add("categoryColors", GsonHolder.GSON.toJsonTree(ConfigIO.get().categoryColors));

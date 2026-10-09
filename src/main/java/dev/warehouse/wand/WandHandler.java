@@ -26,6 +26,8 @@ import net.minecraft.world.phys.BlockHitResult;
  */
 public final class WandHandler {
     public final PendingSelection selection = new PendingSelection();
+    /** Type of the next region drawn; resets to WAREHOUSE after each region. */
+    public static RegionType nextType = RegionType.WAREHOUSE;
     private final RegionManager regions;
     /** The last block the player interacted with and when; used by the container resolver. */
     public static BlockPos lastUseBlockPos;
@@ -80,11 +82,14 @@ public final class WandHandler {
         }
 
         selection.cornerB = pos;
-        String name = regions.nextAutoName(RegionType.WAREHOUSE);
-        Region r = regions.create(name, RegionType.WAREHOUSE, dim, selection.cornerA, pos);
+        RegionType type = nextType;
+        nextType = RegionType.WAREHOUSE;
+        String name = regions.nextAutoName(type);
+        Region r = regions.create(name, type, dim, selection.cornerA, pos);
         selection.clear();
+        if (type == RegionType.SHOP) WarehouseClient.shops().forRegion(r);
         Chat.send(Chat.prefix()
-                .append(Component.literal("Created region ").withStyle(ChatFormatting.WHITE))
+                .append(Component.literal("Created " + (type == RegionType.SHOP ? "shop " : "") + "region ").withStyle(ChatFormatting.WHITE))
                 .append(Component.literal(r.name).withStyle(ChatFormatting.GREEN))
                 .append(Component.literal(" (" + r.volume() + " blocks). Rename with ").withStyle(ChatFormatting.WHITE))
                 .append(Component.literal("/warehouse region rename \"" + r.name + "\" <new name>").withStyle(ChatFormatting.GRAY)));

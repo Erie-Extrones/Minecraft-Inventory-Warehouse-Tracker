@@ -46,14 +46,21 @@ public final class ContainerOverlay {
                 .bounds(right + 4, top + 24, 90, 16)
                 .tooltip(Tooltip.create(Component.literal("Quick-move every inventory stack that belongs in this chest")))
                 .build();
+        Button pickUp = Button.builder(Component.literal("Pick up restock"), b -> pickUpRestock(mc, s))
+                .bounds(right + 4, top + 44, 90, 16)
+                .tooltip(Tooltip.create(Component.literal("Quick-move the stacks the shop restock still needs")))
+                .build();
         take.visible = false;
         deposit.visible = false;
+        pickUp.visible = false;
         Screens.getWidgets(screen).add(take);
         Screens.getWidgets(screen).add(deposit);
+        Screens.getWidgets(screen).add(pickUp);
 
         ScreenEvents.afterTick(screen).register(sc -> {
             take.visible = s.entry != null && !misplacedSlots(s).isEmpty();
             deposit.visible = s.entry != null && !matchingInventorySlots(mc, s).isEmpty();
+            pickUp.visible = s.entry != null && !restockSlots(mc, s).isEmpty();
         });
         ScreenEvents.afterBackground(screen).register((sc, graphics, mx, my, tick) -> draw(mc, graphics, s, left, top));
     }
@@ -87,9 +94,37 @@ public final class ContainerOverlay {
         return out;
     }
 
+    /** Container slots holding items the active restock still needs, enough stacks to cover the remaining amount. */
+    private static List<Slot> restockSlots(Minecraft mc, ScreenTracker.Session s) {
+        List<Slot> out = new ArrayList<>();
+        ClearInventoryMode mode = WarehouseClient.clearMode();
+        if (mc.player == null || s.entry == null || mode.restockShopId() == null) return out;
+        if (mode.restockShopId().equals(s.entry.regionId)) return out; // this is a shop chest, not a source
+        java.util.Map<dev.warehouse.items.ItemKey, Integer> remaining = new java.util.HashMap<>();
+        for (Slot slot : s.menu.slots) {
+            if (slot.container == mc.player.getInventory() || !slot.hasItem()) continue;
+            dev.warehouse.items.ItemKey k = Fingerprinter.key(slot.getItem());
+            int want = remaining.computeIfAbsent(k, mode::restockWanted);
+            if (want <= 0) continue;
+            out.add(slot);
+            remaining.put(k, want - slot.getItem().getCount());
+        }
+        return out;
+    }
+
+    private static void pickUpRestock(Minecraft mc, ScreenTracker.Session s) {
+        if (mc.player == null || mc.gameMode == null) return;
+        for (Slot slot : restockSlots(mc, s)) mc.gameMode.handleContainerInput(s.menu.containerId, slot.index, 0, ContainerInput.QUICK_MOVE, mc.player);
+    }
+
     private static void draw(Minecraft mc, GuiGraphicsExtractor g, ScreenTracker.Session s, int left, int top) {
         if (s.entry == null) return;
         float pulse = 0.5F + 0.5F * (float) Math.sin(System.currentTimeMillis() / 160.0);
+        List<Slot> restock = restockSlots(mc, s);
+        if (!restock.isEmpty()) {
+            int color = ARGB.color((int) (60 + 100 * pulse), 0xFFA040);
+            for (Slot slot : restock) g.fill(left + slot.x - 1, top + slot.y - 1, left + slot.x + 17, top + slot.y + 17, color);
+        }
         Set<Integer> misplaced = misplacedSlots(s);
         if (!misplaced.isEmpty()) {
             int color = ARGB.color((int) (60 + 100 * pulse), 0xFF4040);

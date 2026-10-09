@@ -28,6 +28,12 @@ public final class TooltipProvider {
         if (!cfg.showTooltip || stack.isEmpty()) return;
         if (WarehouseClient.get() == null || !WarehouseClient.storage().isBound()) return;
         ItemKey key = Fingerprinter.key(stack);
+        dev.warehouse.prices.Valuation.Value value = WarehouseClient.valuation().unitValue(key);
+        if (value != null) {
+            lines.add(Component.literal("Value: ").withStyle(ChatFormatting.GOLD)
+                    .append(Component.literal(dev.warehouse.prices.Valuation.money(value.unit()) + " each" + (stack.getCount() > 1 ? ", " + dev.warehouse.prices.Valuation.money(value.unit() * stack.getCount()) + " here" : "")).withStyle(ChatFormatting.YELLOW))
+                    .append(Component.literal("  " + (value.sell() ? "sell" : "buy") + (value.fallback() ? " only" : "") + ", " + value.count() + " price" + (value.count() == 1 ? "" : "s")).withStyle(ChatFormatting.DARK_GRAY)));
+        }
         List<ContainerEntry> holders = WarehouseClient.index().holding(key);
         Organizer organizer = WarehouseClient.organizer();
         Organizer.Resolution dest = organizer.resolve(key);

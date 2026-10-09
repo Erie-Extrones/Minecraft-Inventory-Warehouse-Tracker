@@ -124,6 +124,10 @@ public final class LookHud {
         }
         int misplaced = WarehouseClient.planDiff().forContainer(e.id).size();
         if (misplaced > 0) lines.add(new Line(misplaced + " misplaced stack(s) here", 0xFFFF8080));
+        dev.warehouse.prices.Valuation.Total value = WarehouseClient.valuation().containerValue(e);
+        if (value.pricedTypes() > 0) lines.add(new Line("Worth " + dev.warehouse.prices.Valuation.money(value.amount()) + (value.unpricedTypes() > 0 ? "  (+" + value.unpricedTypes() + " unpriced)" : ""), 0xFFFFD060));
+        var check = WarehouseClient.stockCheck();
+        if (check.isActive()) lines.add(new Line(check.label(), 0xFFFFD060));
     }
 
     private void describeItem(ItemStack stack) {
@@ -154,6 +158,13 @@ public final class LookHud {
             }
         }
         if (inInventory > 0) lines.add(new Line(inInventory + " in your inventory", 0xFFDDDDDD));
+        dev.warehouse.prices.Valuation.Value value = WarehouseClient.valuation().unitValue(key);
+        if (value != null) {
+            lines.add(new Line(dev.warehouse.prices.Valuation.money(value.unit()) + " each" + (stack.getCount() > 1 ? "  ·  " + dev.warehouse.prices.Valuation.money(value.unit() * stack.getCount()) + " in hand" : "")
+                    + (total > 0 ? "  ·  " + dev.warehouse.prices.Valuation.money(value.unit() * total) + " stored" : ""), 0xFFFFD060));
+        }
+        dev.warehouse.prices.Valuation.Total invValue = WarehouseClient.valuation().inventoryValue(Minecraft.getInstance());
+        if (invValue.pricedTypes() > 0) lines.add(new Line("Inventory worth " + dev.warehouse.prices.Valuation.money(invValue.amount()) + (invValue.unpricedTypes() > 0 ? "  (+" + invValue.unpricedTypes() + " unpriced)" : ""), 0xFFC0A040));
         Organizer.Resolution dest = WarehouseClient.organizer().resolve(stack);
         if (dest != null) {
             lines.add(new Line("Belongs in: " + dest.category() + " @ " + dest.container().posString(), WarehouseClient.organizer().categoryColor(dest.category()) | 0xFF000000));

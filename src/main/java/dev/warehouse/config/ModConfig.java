@@ -114,6 +114,39 @@ public final class ModConfig {
     /** Keep plugin items where they already are when their category changes, instead of marking them misplaced. */
     public boolean customItemsStayPut = true;
 
+    // ---- Prices and shops ----
+    public String currencySymbol = "$";
+    /** Which observed price values your items: "sell" (what shops pay you) or "buy" (what shops charge). */
+    public String valuationSide = "sell";
+    /** Use the other side when only that one has been seen. */
+    public boolean valuationFallbackOtherSide = true;
+    /** Observations older than this are ignored when valuing. */
+    public int priceMaxAgeDays = 60;
+    /** Record prices from shop chat (QuickShop-style "Shop Information" blocks and purchase/sale confirmations). */
+    public boolean capturePricesFromChat = true;
+    /** Record prices from ChestShop-style signs you look at. */
+    public boolean capturePricesFromSigns = true;
+    /** Say in chat when a price is recorded automatically. */
+    public boolean announcePriceCapture = true;
+    /** Extra chat patterns for other shop plugins. Groups are 1-based; qtyGroup 0 = one unit; side is "buy" (you pay) or "sell" (you receive). */
+    public List<PricePattern> priceChatPatterns = new ArrayList<>();
+    /** Open the Overview tab the first time the warehouse screen opens each session; true = every time. */
+    public boolean alwaysOpenOverview = false;
+    public int shopColor = 0xFFFFA040;
+    /** Remind to do a shop inventory after this many hours. */
+    public int shopInventoryReminderHours = 24;
+    /** Default restock threshold as a fraction of the most of an item the shop ever held. */
+    public double shopRestockFraction = 0.25;
+    public int stockCheckColor = 0xFFFFD040;
+
+    public static final class PricePattern {
+        public String regex = "";
+        public String side = "buy";
+        public int itemGroup = 1;
+        public int priceGroup = 2;
+        public int qtyGroup = 0;
+    }
+
     // ---- Organizer ----
     /** Slot headroom multiplier when estimating category volume. */
     public double volumeHeadroom = 1.5;

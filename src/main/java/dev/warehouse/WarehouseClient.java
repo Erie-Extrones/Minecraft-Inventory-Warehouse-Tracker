@@ -72,6 +72,12 @@ public final class WarehouseClient implements ClientModInitializer {
     private GuidePath guidePath;
     private dev.warehouse.organizer.Condenser condenser;
     private dev.warehouse.export.ManifestExporter manifestExporter;
+    private dev.warehouse.prices.PriceBook priceBook;
+    private dev.warehouse.prices.Valuation valuation;
+    private dev.warehouse.prices.ShopChatParser shopChatParser;
+    private dev.warehouse.prices.SignPriceReader signPriceReader;
+    private dev.warehouse.shops.ShopManager shops;
+    private dev.warehouse.shops.StockCheck stockCheck;
     private StaleContainerSweeper staleSweeper;
 
     public static WarehouseClient get() {
@@ -166,6 +172,26 @@ public final class WarehouseClient implements ClientModInitializer {
         return instance.manifestExporter;
     }
 
+    public static dev.warehouse.prices.PriceBook prices() {
+        return instance.priceBook;
+    }
+
+    public static dev.warehouse.prices.Valuation valuation() {
+        return instance.valuation;
+    }
+
+    public static dev.warehouse.prices.ShopChatParser shopChatParser() {
+        return instance.shopChatParser;
+    }
+
+    public static dev.warehouse.shops.ShopManager shops() {
+        return instance.shops;
+    }
+
+    public static dev.warehouse.shops.StockCheck stockCheck() {
+        return instance.stockCheck;
+    }
+
     public static HeldItemGuide heldItemGuide() {
         return instance.heldItemGuide;
     }
@@ -202,6 +228,16 @@ public final class WarehouseClient implements ClientModInitializer {
         exporter = new dev.warehouse.export.Exporter(storage);
         manifestExporter = new dev.warehouse.export.ManifestExporter();
         storage.onBind(manifestExporter::onBind);
+        priceBook = new dev.warehouse.prices.PriceBook(storage.prices);
+        valuation = new dev.warehouse.prices.Valuation(priceBook);
+        shopChatParser = new dev.warehouse.prices.ShopChatParser();
+        signPriceReader = new dev.warehouse.prices.SignPriceReader();
+        shops = new dev.warehouse.shops.ShopManager(storage.shops, regions);
+        stockCheck = new dev.warehouse.shops.StockCheck();
+        storage.onBind(() -> {
+            valuation.invalidate();
+            stockCheck.onBind(Minecraft.getInstance());
+        });
         importer = new dev.warehouse.export.Importer(storage);
         inventoryTracker = new InventoryTracker();
         heldItemGuide = new HeldItemGuide();
@@ -218,6 +254,7 @@ public final class WarehouseClient implements ClientModInitializer {
         Keybinds.register();
         wand.register();
         claimParser.register();
+        shopChatParser.register();
         screenTracker.register();
         entityScanner.register();
         TooltipProvider.register();
@@ -283,6 +320,8 @@ public final class WarehouseClient implements ClientModInitializer {
         inventoryTracker.tick(mc);
         condenser.tick(mc);
         manifestExporter.tick(mc);
+        signPriceReader.tick(mc);
+        stockCheck.tick(mc);
         if (mc.level.getGameTime() % 20 == 0) lostLog.expire();
         storage.tick();
     }

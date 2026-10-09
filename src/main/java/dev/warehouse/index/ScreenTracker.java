@@ -172,6 +172,7 @@ public final class ScreenTracker {
         e.lastSeenEpochMs = System.currentTimeMillis();
         e.customName = isDefaultTitle(title) ? null : title;
         index.upsert(e);
+        WarehouseClient.stockCheck().onContainerSeen(e);
         if (firstSeen) WarehouseClient.organizer().onContainerFirstSeen();
     }
 

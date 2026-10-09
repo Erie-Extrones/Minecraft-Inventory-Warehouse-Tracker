@@ -35,7 +35,7 @@ public final class RegionRenderer {
         try {
             if (cfg.showRegionOutlines) {
                 for (Region r : regions.inDimension(dim)) {
-                    int color = r.type == RegionType.WAREHOUSE ? cfg.warehouseColor : cfg.claimColor;
+                    int color = r.type == RegionType.WAREHOUSE ? cfg.warehouseColor : r.type == RegionType.SHOP ? cfg.shopColor : cfg.claimColor;
                     drawBox(r, color, mc);
                 }
             }

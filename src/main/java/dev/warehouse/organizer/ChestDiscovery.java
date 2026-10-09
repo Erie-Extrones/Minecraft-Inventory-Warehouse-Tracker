@@ -44,6 +44,15 @@ public final class ChestDiscovery {
         String dim = RegionManager.dimensionId(mc.level);
         List<Region> wh = new ArrayList<>();
         for (Region r : regions.ofType(RegionType.WAREHOUSE)) if (r.dimension.equals(dim)) wh.add(r);
+        return run(mc, wh);
+    }
+
+    /** Scan the given regions (any type) in the current dimension. */
+    public Report run(Minecraft mc, List<Region> toScan) {
+        if (mc.level == null) return new Report(0, 0, 0, 0, List.of());
+        String dim = RegionManager.dimensionId(mc.level);
+        List<Region> wh = new ArrayList<>();
+        for (Region r : toScan) if (r.dimension.equals(dim)) wh.add(r);
         int found = 0, added = 0, chunksTotal = 0, chunksUnloaded = 0;
         Set<BlockPos> handled = new HashSet<>();
         boolean changed = false;

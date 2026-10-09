@@ -28,8 +28,10 @@ public final class StorageManager {
     public final JsonStore<List<ItemGroup>> items = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<ItemGroup>>() {}.getType(), ArrayList::new);
     public final JsonStore<Plan> plan = new JsonStore<>(GsonHolder.GSON, Plan.class, Plan::empty);
     public final JsonStore<List<LostEntry>> lost = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<LostEntry>>() {}.getType(), ArrayList::new);
+    public final JsonStore<List<dev.warehouse.prices.PriceObservation>> prices = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<dev.warehouse.prices.PriceObservation>>() {}.getType(), ArrayList::new);
+    public final JsonStore<List<dev.warehouse.shops.Shop>> shops = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<dev.warehouse.shops.Shop>>() {}.getType(), ArrayList::new);
 
-    private final List<JsonStore<?>> all = List.of(regions, claims, index, items, plan, lost);
+    private final List<JsonStore<?>> all = List.of(regions, claims, index, items, plan, lost, prices, shops);
     private String serverKey;
     private Path serverDir;
     private final List<Runnable> onBindListeners = new ArrayList<>();
@@ -66,6 +68,8 @@ public final class StorageManager {
         items.bind(serverDir.resolve("items.json"));
         plan.bind(serverDir.resolve("plan.json"));
         lost.bind(serverDir.resolve("lost.json"));
+        prices.bind(serverDir.resolve("prices.json"));
+        shops.bind(serverDir.resolve("shops.json"));
         try {
             java.nio.file.Files.createDirectories(serverDir);
         } catch (Exception e) {

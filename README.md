@@ -1,6 +1,6 @@
 # Warehouse
 
-A client-only Fabric mod that remembers where your items live. Draw regions around your storage, open chests as you normally would, and the mod indexes what it sees. It can then tell you where any item is stored, decide which chest each item belongs in, list items sitting in the wrong chest, and light up the chests you need to visit to empty your inventory. Nothing runs on the server.
+A client-only Fabric mod that remembers where your items live and what they are worth. Draw regions around your storage, open chests as you normally would, and the mod indexes what it sees. It can then tell you where any item is stored, decide which chest each item belongs in, list items sitting in the wrong chest, and light up the chests you need to visit to empty your inventory. Nothing runs on the server.
 
 ## Requirements
 
@@ -47,6 +47,27 @@ After accepting:
 Chests you break or move are forgotten automatically within a few seconds of walking near their old spot, and the mod reminds you to replan once you are done rearranging.
 
 Chunks that are not loaded cannot be scanned. The run report says how many were missed; walk the area and rerun.
+
+## Overview, values and prices
+
+The **Overview** tab is where the screen lands the first time you open it each session (`alwaysOpenOverview` makes that every time): containers and how many are stale, zone fill bars, misplaced and lost counts, zones low on space, the value of the warehouse and of your inventory, and every shop with its last inventory. Each line opens its tab. **Stock check** lights up every warehouse container and unhighlights each one as you open it, which is the quickest way to refresh a stale index.
+
+Values come from prices you have seen. The mod records them for you:
+
+- **Shop chat.** QuickShop-style "Shop Information" blocks (owner, item, price per item, selling or buying) and "Successfully purchased/sold: N Item for $X" lines are read as they arrive. A block whose owner is you records your own shop's sell price instead. Other plugins can be matched with `priceChatPatterns` in the config (regex plus which group holds the item, the price and an optional quantity).
+- **Signs.** ChestShop-style signs you look at (owner, quantity, `B 10 : S 5`, item) are read once every ten minutes per sign.
+- **By hand.** Hold the item and run `/warehouse price buy <amount> [qty] [shop]` for what a shop charges, or `price sell` for what a shop pays. `/warehouse price list` shows every observation for the held item, `price clear` forgets them.
+
+Each item's value is the **median** of the observations on one side, sell by default (`valuationSide`), ignoring anything older than `priceMaxAgeDays`; when only the other side has been seen it is used and marked "buy only". Custom items are priced per group, so every variant of a key or kit shares one price. Values show on item tooltips, on the sneak card (held item, chest you look at, your whole inventory) and in `/warehouse value`. Shulker contents count; the boxes do not.
+
+## Player shops
+
+A shop is a region of type **shop**: run `/warehouse shop wand`, then draw it with the wand like a warehouse region (or convert one with `/warehouse region type <name> shop`). Chests inside are indexed as you open them and never join a plan.
+
+- **Prices.** Hold an item in the shop and `/warehouse shop price <amount>` sets what customers pay you; your own QuickShop blocks set it automatically. Stock is valued at your price, falling back to the market median where you have not set one.
+- **Inventory.** `/warehouse shop inventory` (or **Do inventory** on the Shops tab) highlights every container in the shop; each one unhighlights when you open it, and when the last one is opened the stock is recorded and the shop report opens: every item with stock, threshold, LOW/OUT status, price, value, and how many sold since the previous inventory with the revenue that implies. The mod reminds you on join and when you walk into a shop whose last inventory is older than `shopInventoryReminderHours`.
+- **Thresholds.** An item is LOW below a quarter of the most the shop ever held of it (`shopRestockFraction`); `/warehouse shop min <n>` while holding it sets a fixed threshold.
+- **Restock route.** `/warehouse shop restock` (or **Restock route**) works out what is low, how much the warehouse has, and walks you to the warehouse chests holding it (a **Pick up restock** button appears in those chests) and then to the shop chests to deliver. Items the warehouse does not have are listed, not routed.
 
 ## Condensing into shulkers
 
@@ -139,6 +160,9 @@ It prints each group's category before and after, without starting Minecraft.
 /warehouse search [query]      /warehouse misplaced      /warehouse lost      /warehouse unsorted
 /warehouse condense [list]     (what to pack into shulkers when a zone is low on space)
 /warehouse rules list | reload   /warehouse manifest export
+/warehouse value                    /warehouse price buy|sell <amount> [qty] [shop] | list | clear
+/warehouse shop wand | list | report [name] | inventory [name] | restock [name] | price <amount>|clear | min <n>|clear
+/warehouse stockcheck [cancel]      /warehouse region type <name> warehouse|shop|claim
 /warehouse plan run | replan | accept | reject | show | clear | count <n> | preview [on|off]
 /warehouse plan override here | clear
 /warehouse plan category <item or group> <category>
@@ -169,7 +193,7 @@ config/warehouse/
   config.json              global settings: wand, colors, particle guide, prior zone shares, essentials rules, strip lists, shared folder
   custom_item_rules.json   your overrides for plugin item sorting (optional)
   <server-key>/            one folder per server address, or sp-<world> for singleplayer
-    regions.json  claims.json  index.json  items.json  plan.json  lost.json
+    regions.json  claims.json  index.json  items.json  plan.json  lost.json  prices.json  shops.json
   exports/                 export bundles
 ```
 
