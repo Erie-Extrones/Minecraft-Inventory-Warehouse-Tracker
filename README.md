@@ -50,7 +50,7 @@ Chunks that are not loaded cannot be scanned. The run report says how many were 
 
 ## Overview, values and prices
 
-The **Overview** tab is where the screen lands the first time you open it each session (`alwaysOpenOverview` makes that every time): containers and how many are stale, zone fill bars, misplaced and lost counts, zones low on space, the value of the warehouse and of your inventory, and every shop with its last inventory. Each line opens its tab. **Stock check** lights up every warehouse container and unhighlights each one as you open it, which is the quickest way to refresh a stale index.
+The **Overview** tab is a fixed dashboard, no scrolling: stat tiles (containers, item types, warehouse value, inventory value, misplaced, shops or lost items), a donut of items by category, zone fill bars, and a row of chips for lost items, zones low on space, unsorted inventory, stale chests, a running stock check and the active craft plan. Everything is clickable and opens its tab. It is where the screen lands the first time you open it each session (`alwaysOpenOverview` makes that every time). **Stock check** lights up every warehouse container and unhighlights each one as you open it, which is the quickest way to refresh a stale index.
 
 Values come from prices you have seen. The mod records them for you:
 
@@ -59,6 +59,18 @@ Values come from prices you have seen. The mod records them for you:
 - **By hand.** Hold the item and run `/warehouse price buy <amount> [qty] [shop]` for what a shop charges, or `price sell` for what a shop pays. `/warehouse price list` shows every observation for the held item, `price clear` forgets them.
 
 Each item's value is the **median** of the observations on one side, sell by default (`valuationSide`), ignoring anything older than `priceMaxAgeDays`; when only the other side has been seen it is used and marked "buy only". Custom items are priced per group, so every variant of a key or kit shares one price. Values show on item tooltips, on the sneak card (held item, chest you look at, your whole inventory) and in `/warehouse value`. Shulker contents count; the boxes do not.
+
+## Crafting planner and shopping list
+
+`/warehouse craft <count> [item]` (held item when omitted) works out what you need to make that many: recipes are expanded down to base ingredients, your inventory is used first, then the warehouse, and intermediates are crafted when their ingredients can be found. The result is a shopping list pinned to the top right of the screen until you clear it:
+
+- green: you carry enough; yellow: the warehouse has it, with the chest to visit; red: nobody has it, with how many are missing.
+- `/warehouse craft route` starts a gather route through the warehouse chests holding what you lack (a **Pick up restock** button appears in each); `/warehouse craft show` prints the full breakdown with the craft steps; `/warehouse craft clear`; `/warehouse craft hud off`.
+- Recipes come from the client recipe book, which only has what you have unlocked. With the JEI add-on installed, JEI's recipes are used too.
+
+## JEI add-on
+
+`warehouse-jei` adds two keys that work on whatever JEI shows under the mouse: **Find JEI item in warehouse** (default W) highlights the chest holding it, or where it belongs, and closes the screen; **Plan craft of JEI item** (default C) opens chat with `/warehouse craft 64 <item>` prefilled so you type the count. It also feeds JEI's crafting, smelting, stonecutting and smithing recipes to the planner. Put it in `mods` next to the warehouse jar and JEI 31 for 26.3.
 
 ## Player shops
 
@@ -81,7 +93,7 @@ Filled shulkers are filed by the category of their dominant contents, so once pa
 
 ## Clear inventory mode
 
-Bind the *Toggle clear-inventory mode* key or run `/warehouse clearmode`. Every non-essential stack in your inventory lights up its destination chest, colored by category and labeled with the item and count. The chests are ordered into a short walking route from where you stand, numbered, with a particle trail leading to stop 1. Open a lit chest and press **Deposit matching** to quick-move everything that belongs there. The mode exits on its own when nothing is left to put away.
+Bind the *Toggle clear-inventory mode* key or run `/warehouse clearmode`. Every non-essential stack in your inventory lights up its destination chest, colored by category and labeled with the item and count. The chests are ordered into a short walking route from where you stand, numbered, with a particle trail leading to stop 1. Open a lit chest and press **Deposit matching** to quick-move everything that belongs there. The mode exits on its own when nothing is left to put away. Hold an item and run `/warehouse keep` to always leave it in your inventory (`keep remove` undoes it, `keep list` shows the rules).
 
 Essentials are kept: equipped armor, offhand, tools and weapons on the hotbar, food, custom gear, and anything on the `alwaysKeep` list in the config.
 
@@ -163,6 +175,8 @@ It prints each group's category before and after, without starting Minecraft.
 /warehouse value                    /warehouse price buy|sell <amount> [qty] [shop] | list | clear
 /warehouse shop wand | list | report [name] | inventory [name] | restock [name] | price <amount>|clear | min <n>|clear
 /warehouse stockcheck [cancel]      /warehouse region type <name> warehouse|shop|claim
+/warehouse keep [remove|list]       (always keep the held item in your inventory)
+/warehouse craft <count> [item] | show | route | clear | hud on|off
 /warehouse plan run | replan | accept | reject | show | clear | count <n> | preview [on|off]
 /warehouse plan override here | clear
 /warehouse plan category <item or group> <category>
@@ -185,6 +199,8 @@ It prints each group's category before and after, without starting Minecraft.
 | Open warehouse search | unbound |
 | Find held item | unbound |
 | Toggle clear-inventory mode | unbound |
+| Find JEI item in warehouse (JEI add-on) | W in JEI screens |
+| Plan craft of JEI item (JEI add-on) | C in JEI screens |
 
 ## Files
 
@@ -205,7 +221,7 @@ Everything the mod knows is what the client has seen. Every location is "last se
 ./gradlew build
 ```
 
-Needs JDK 25. The mod jar lands in `build/libs/`, the Controlify add-on in `controlify-addon/build/libs/`.
+Needs JDK 25. The mod jar lands in `build/libs/`, the Controlify add-on in `controlify-addon/build/libs/`, the JEI add-on in `jei-addon/build/libs/`.
 
 ## Releasing
 

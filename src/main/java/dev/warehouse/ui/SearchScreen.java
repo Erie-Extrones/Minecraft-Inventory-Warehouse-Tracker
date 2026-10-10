@@ -586,90 +586,11 @@ public final class SearchScreen extends Screen {
         rows.add(new Row(null, name, detail, "", color, null, List.of(), true));
     }
 
+    private @Nullable Dashboard dashboard;
+
     private void buildOverview() {
-        var index = WarehouseClient.index();
-        var val = WarehouseClient.valuation();
-        long now = System.currentTimeMillis();
-        int containers = 0, unopened = 0, stale = 0;
-        for (ContainerEntry e : index.all()) {
-            Region r = WarehouseClient.regions().byId(e.regionId);
-            if (r == null || r.type != dev.warehouse.region.RegionType.WAREHOUSE) continue;
-            containers++;
-            if (e.lastSeenEpochMs == 0) unopened++;
-            else if (now - e.lastSeenEpochMs > 7L * 86_400_000L) stale++;
-        }
-        Map<ItemKey, Long> counts = val.regionCounts(dev.warehouse.region.RegionType.WAREHOUSE);
-        long items = 0;
-        for (long c : counts.values()) items += c;
-        header("Warehouse at a glance", WarehouseClient.regions().ofType(dev.warehouse.region.RegionType.WAREHOUSE).size() + " region(s)", 0xFF40C8FF);
-        link(containers + " containers", (unopened > 0 ? unopened + " never opened, " : "") + stale + " not seen in 7 days", counts.size() + " types, " + items + " items", 0xFFDDDDDD, Tab.SEARCH, null);
-        var check = WarehouseClient.stockCheck();
-        if (check.isActive()) link(check.label(), "open the highlighted containers", "", 0xFFFFD060, Tab.OVERVIEW, null);
-
-        Organizer org = WarehouseClient.organizer();
-        Plan plan = org.plan();
-        if (plan.isActive()) {
-            List<Organizer.ZoneSummary> zones = new ArrayList<>(org.summarize(plan));
-            zones.sort((a, b) -> Integer.compare(pct(b), pct(a)));
-            header("Zones", zones.size() + " zones over " + plan.chestBudget + " chests, plan from " + Staleness.describe(plan.createdEpochMs), 0xFF80FF80);
-            for (Organizer.ZoneSummary z : zones) {
-                int p = pct(z);
-                int color = org.categoryColor(z.category());
-                rows.add(new Row(null, "\u25a0 " + z.category(), bar(p) + "  " + z.slotsUsed() + "/" + z.slotsTotal() + " slots, " + z.chests() + " chest(s)", p + "%",
-                        p >= 90 ? 0xFFFF6060 : p >= ConfigIO.get().condenseAtFillPercent ? 0xFFFFD040 : color, shift -> switchTab(Tab.PLAN),
-                        List.of(Component.literal(z.category()).withStyle(ChatFormatting.WHITE), Component.literal("Open the Plan tab").withStyle(ChatFormatting.DARK_GRAY)), false));
-            }
-        } else {
-            link("No accepted plan", org.pending() != null ? "a pending plan is waiting for Accept" : "Plan tab: Run, then Accept", "", 0xFFFFD040, Tab.PLAN, null);
-        }
-
-        header("Needs attention", "", 0xFFFFD040);
-        int misplaced = plan.isActive() ? WarehouseClient.planDiff().entries().size() : 0;
-        link("Misplaced stacks", plan.isActive() ? WarehouseClient.planDiff().unopenedSincePlan() + " chest(s) not opened since the plan" : "needs an accepted plan", String.valueOf(misplaced), misplaced > 0 ? 0xFFFF8080 : 0xFF80FF80, Tab.MISPLACED, null);
-        int lost = WarehouseClient.lostLog().entries().size();
-        link("Lost items", "drops and deaths still remembered", String.valueOf(lost), lost > 0 ? 0xFFFF8080 : 0xFF80FF80, Tab.LOST, null);
-        var urgent = WarehouseClient.condenser().urgent();
-        int freeable = 0;
-        for (var r : urgent) freeable += r.totalSlotsFreed();
-        link("Zones low on space", urgent.isEmpty() ? "nothing to condense" : "packing into shulkers would free " + freeable + " slots", String.valueOf(urgent.size()), urgent.isEmpty() ? 0xFF80FF80 : 0xFFFFD040, Tab.CONDENSE, null);
-        int unsorted = 0;
-        if (minecraft != null && minecraft.player != null) {
-            var inv = minecraft.player.getInventory();
-            for (int i = 0; i < inv.getContainerSize(); i++) {
-                ItemStack st = inv.getItem(i);
-                if (st.isEmpty() || WarehouseClient.clearMode().isEssential(minecraft, st, i)) continue;
-                ItemKey k = Fingerprinter.key(st);
-                if (WarehouseClient.index().holding(k).isEmpty() && org.resolve(k) == null) unsorted++;
-            }
-        }
-        link("Inventory stacks without a home", "", String.valueOf(unsorted), unsorted > 0 ? 0xFFFFD040 : 0xFF80FF80, Tab.UNSORTED, null);
-
-        header("Value", "median " + ConfigIO.get().valuationSide + " prices; /warehouse price to add some", 0xFFFFD060);
-        dev.warehouse.prices.Valuation.Total wh = val.total(counts);
-        List<dev.warehouse.prices.Valuation.Unpriced> unpriced = val.unpriced(counts, 3);
-        StringBuilder up = new StringBuilder();
-        for (var u : unpriced) up.append(up.length() == 0 ? "" : ", ").append(u.name()).append(" ×").append(u.count());
-        link("Warehouse", wh.pricedTypes() + " priced type(s)" + (wh.unpricedTypes() > 0 ? ", " + wh.unpricedTypes() + " unpriced: " + up : ""), dev.warehouse.prices.Valuation.money(wh.amount()), 0xFFFFD060, Tab.SEARCH, null);
-        dev.warehouse.prices.Valuation.Total inv = minecraft != null ? val.inventoryValue(minecraft) : new dev.warehouse.prices.Valuation.Total(0, 0, 0, 0);
-        link("Your inventory", inv.unpricedTypes() > 0 ? inv.unpricedTypes() + " unpriced type(s)" : "", dev.warehouse.prices.Valuation.money(inv.amount()), 0xFFFFD060, Tab.UNSORTED, null);
-        int priceCount = WarehouseClient.prices().all().size();
-        link("Prices known", priceCount + " observation(s); shop chat and signs are recorded automatically", "", 0xFFAAAAAA, Tab.SEARCH, null);
-
-        var shops = WarehouseClient.shops().all();
-        if (!shops.isEmpty()) {
-            header("Shops", shops.size() + " shop(s)", ConfigIO.get().shopColor);
-            for (var shop : shops) {
-                var rep = WarehouseClient.shops().report(shop);
-                final java.util.UUID id = shop.regionId;
-                String detail = rep.items().size() + " item type(s), last inventory " + (shop.lastInventoryEpochMs == 0 ? "never" : Staleness.describe(shop.lastInventoryEpochMs)) + (WarehouseClient.shops().overdue(shop) ? "  (inventory due)" : "");
-                rows.add(new Row(null, WarehouseClient.shops().name(shop), detail, dev.warehouse.prices.Valuation.money(rep.value()) + (rep.low() + rep.out() > 0 ? "  " + rep.low() + " low, " + rep.out() + " out" : ""),
-                        rep.out() > 0 ? 0xFFFF8080 : rep.low() > 0 ? 0xFFFFD040 : 0xFF80FF80, shift -> {
-                    selectedShop = id;
-                    switchTab(Tab.SHOPS);
-                }, List.of(Component.literal("Open this shop's report").withStyle(ChatFormatting.DARK_GRAY)), false));
-            }
-        }
-        footer = "Click a line to open its tab   |   Stock check lights up every warehouse container until you open it";
+        dashboard = Dashboard.compute(minecraft);
+        footer = "Click a tile, slice, bar or chip to open its tab   |   Stock check lights up every warehouse container until you open it";
     }
 
     private static int pct(Organizer.ZoneSummary z) {
@@ -762,6 +683,11 @@ public final class SearchScreen extends Screen {
         if (server != null) g.text(getFont(), server, 20 + getFont().width("Warehouse") + 8, 8, 0xFF808080);
         if (tab == Tab.MISPLACED) g.text(getFont(), "min ×" + misplacedMin, 42, 49, 0xFFFFFFFF);
 
+        if (tab == Tab.OVERVIEW && dashboard != null) {
+            dashboard.draw(g, getFont(), listLeft, listTop, listRight, listBottom, mouseX, mouseY);
+            g.text(getFont(), footer, 20, height - 16, 0xFFA0A0A0);
+            return;
+        }
         g.fill(listLeft, listTop - 1, listRight, listBottom + 1, 0x60000000);
         g.enableScissor(listLeft, listTop, listRight, listBottom);
         int y = listTop - scroll;
@@ -805,6 +731,19 @@ public final class SearchScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (super.mouseClicked(event, doubleClick)) return true;
         double mx = event.x(), my = event.y();
+        if (tab == Tab.OVERVIEW && dashboard != null) {
+            Object target = dashboard.click(mx, my);
+            if (target instanceof java.util.UUID shopId) {
+                selectedShop = shopId;
+                switchTab(Tab.SHOPS);
+                return true;
+            }
+            if (target instanceof Tab t && t != Tab.OVERVIEW) {
+                switchTab(t);
+                return true;
+            }
+            return false;
+        }
         if (mx >= listLeft && mx < listRight && my >= listTop && my < listBottom) {
             int idx = (int) ((my - listTop + scroll) / ROW_H);
             if (idx >= 0 && idx < rows.size() && rows.get(idx).onClick != null) {
