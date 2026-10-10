@@ -98,8 +98,7 @@ public final class ContainerOverlay {
     private static List<Slot> restockSlots(Minecraft mc, ScreenTracker.Session s) {
         List<Slot> out = new ArrayList<>();
         ClearInventoryMode mode = WarehouseClient.clearMode();
-        if (mc.player == null || s.entry == null || mode.restockShopId() == null) return out;
-        if (mode.restockShopId().equals(s.entry.regionId)) return out; // this is a shop chest, not a source
+        if (mc.player == null || s.entry == null || !mode.isFetchSource(s.entry.id)) return out;
         java.util.Map<dev.warehouse.items.ItemKey, Integer> remaining = new java.util.HashMap<>();
         for (Slot slot : s.menu.slots) {
             if (slot.container == mc.player.getInventory() || !slot.hasItem()) continue;

@@ -69,6 +69,17 @@ public final class ShopCommands {
                         .then(literal("clear").executes(c -> shopMin(c.getSource().getClient(), null)))
                         .then(argument("count", IntegerArgumentType.integer(0)).executes(c -> shopMin(c.getSource().getClient(), IntegerArgumentType.getInteger(c, "count"))))));
 
+        root.then(literal("keep")
+                .executes(c -> keep(c.getSource().getClient(), true))
+                .then(literal("remove").executes(c -> keep(c.getSource().getClient(), false)))
+                .then(literal("list").executes(c -> {
+                    var cfg = dev.warehouse.config.ConfigIO.get();
+                    Chat.info("Always kept (" + cfg.alwaysKeep.size() + "): " + String.join(", ", cfg.alwaysKeep));
+                    Chat.send(Component.literal("  Also kept: " + (cfg.essentialEquippedArmor ? "worn armor, " : "") + (cfg.essentialOffhand ? "off-hand, " : "") + (cfg.essentialHotbarTools ? "hotbar tools/weapons/armor, " : "")
+                            + (cfg.essentialFood ? "food, " : "") + (cfg.essentialCustomGear ? "plugin gear" : "")).withStyle(ChatFormatting.GRAY));
+                    return 1;
+                })));
+
         root.then(literal("stockcheck").executes(c -> {
             WarehouseClient.stockCheck().start(c.getSource().getClient(), StockCheck.Kind.WAREHOUSE, null);
             return 1;
@@ -105,6 +116,38 @@ public final class ShopCommands {
                             Chat.info("Region '" + r.name + "' is now a " + type.name().toLowerCase() + " region.");
                             return 1;
                         })));
+    }
+
+    // ------------------------------------------------------------ essentials
+
+    /** Add or remove the held item from the always-keep list: its group id for plugin items, else its item id. */
+    private static int keep(Minecraft mc, boolean add) {
+        ItemStack st = held(mc);
+        if (st == null) return 0;
+        ItemKey key = Fingerprinter.key(st);
+        WarehouseClient.categories().learn(st, key);
+        var group = WarehouseClient.categories().groupFor(key);
+        String entry = group != null ? group.groupId : key.itemId;
+        var cfg = dev.warehouse.config.ConfigIO.get();
+        String name = Fingerprinter.displayName(st);
+        if (add) {
+            if (cfg.alwaysKeep.contains(entry)) {
+                Chat.info(name + " is already always kept (" + entry + ").");
+                return 1;
+            }
+            cfg.alwaysKeep.add(entry);
+            dev.warehouse.config.ConfigIO.save();
+            Chat.info(name + " is now always kept: clear-inventory and sort routes leave it in your inventory (" + entry + ").");
+        } else {
+            boolean removed = cfg.alwaysKeep.remove(entry) | cfg.alwaysKeep.remove(key.itemId) | cfg.alwaysKeep.remove(key.asString());
+            if (!removed) {
+                Chat.error(name + " was not on the always-keep list. /warehouse keep list shows it.");
+                return 0;
+            }
+            dev.warehouse.config.ConfigIO.save();
+            Chat.info(name + " removed from the always-keep list.");
+        }
+        return 1;
     }
 
     // ------------------------------------------------------------ prices

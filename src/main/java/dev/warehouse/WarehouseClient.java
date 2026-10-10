@@ -78,6 +78,7 @@ public final class WarehouseClient implements ClientModInitializer {
     private dev.warehouse.prices.SignPriceReader signPriceReader;
     private dev.warehouse.shops.ShopManager shops;
     private dev.warehouse.shops.StockCheck stockCheck;
+    private dev.warehouse.craft.CraftPlanner craftPlanner;
     private StaleContainerSweeper staleSweeper;
 
     public static WarehouseClient get() {
@@ -192,6 +193,10 @@ public final class WarehouseClient implements ClientModInitializer {
         return instance.stockCheck;
     }
 
+    public static dev.warehouse.craft.CraftPlanner craftPlanner() {
+        return instance.craftPlanner;
+    }
+
     public static HeldItemGuide heldItemGuide() {
         return instance.heldItemGuide;
     }
@@ -234,6 +239,8 @@ public final class WarehouseClient implements ClientModInitializer {
         signPriceReader = new dev.warehouse.prices.SignPriceReader();
         shops = new dev.warehouse.shops.ShopManager(storage.shops, regions);
         stockCheck = new dev.warehouse.shops.StockCheck();
+        craftPlanner = new dev.warehouse.craft.CraftPlanner();
+        index.onChange(craftPlanner::invalidate);
         storage.onBind(() -> {
             valuation.invalidate();
             stockCheck.onBind(Minecraft.getInstance());
@@ -261,6 +268,7 @@ public final class WarehouseClient implements ClientModInitializer {
         DropDetector.register();
         InventoryButton.register();
         new LookHud().register();
+        new dev.warehouse.craft.ShoppingListHud().register();
         WarehouseCommands.register();
 
         ClientPlayConnectionEvents.JOIN.register((listener, sender, client) -> {
@@ -322,6 +330,7 @@ public final class WarehouseClient implements ClientModInitializer {
         manifestExporter.tick(mc);
         signPriceReader.tick(mc);
         stockCheck.tick(mc);
+        craftPlanner.tick(mc);
         if (mc.level.getGameTime() % 20 == 0) lostLog.expire();
         storage.tick();
     }

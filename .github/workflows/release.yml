@@ -44,11 +44,14 @@ jobs:
           fi
           ASSET="warehouse-${MOD_VERSION}+mc${MC_VERSION}.jar"
           ADDON="warehouse-controlify-${MOD_VERSION}+mc${MC_VERSION}.jar"
+          JEI="warehouse-jei-${MOD_VERSION}+mc${MC_VERSION}.jar"
           cp "build/libs/warehouse-${MOD_VERSION}.jar" "$ASSET"
           cp "controlify-addon/build/libs/warehouse-controlify-${MOD_VERSION}.jar" "$ADDON"
+          cp "jei-addon/build/libs/warehouse-jei-${MOD_VERSION}.jar" "$JEI"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
           echo "addon=$ADDON" >> "$GITHUB_OUTPUT"
+          echo "jei=$JEI" >> "$GITHUB_OUTPUT"
           echo "title=Warehouse ${MOD_VERSION} for Minecraft ${MC_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create tag if it does not exist
@@ -67,8 +70,8 @@ jobs:
           NOTES_ARGS="--generate-notes"
           if [ -f .github/release-notes.md ]; then NOTES_ARGS="--notes-file .github/release-notes.md"; fi
           if gh release view "${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
-            gh release upload "${{ steps.meta.outputs.tag }}" "${{ steps.meta.outputs.asset }}" "${{ steps.meta.outputs.addon }}" --clobber
+            gh release upload "${{ steps.meta.outputs.tag }}" "${{ steps.meta.outputs.asset }}" "${{ steps.meta.outputs.addon }}" "${{ steps.meta.outputs.jei }}" --clobber
           else
-            gh release create "${{ steps.meta.outputs.tag }}" "${{ steps.meta.outputs.asset }}" "${{ steps.meta.outputs.addon }}" \
+            gh release create "${{ steps.meta.outputs.tag }}" "${{ steps.meta.outputs.asset }}" "${{ steps.meta.outputs.addon }}" "${{ steps.meta.outputs.jei }}" \
               --title "${{ steps.meta.outputs.title }}" $NOTES_ARGS
           fi

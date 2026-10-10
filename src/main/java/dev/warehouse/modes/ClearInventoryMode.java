@@ -42,7 +42,7 @@ import java.util.UUID;
  * Stops are ordered into a short walking tour from the player and numbered in the world.
  */
 public final class ClearInventoryMode {
-    public enum Kind { CLEAR, SORT, RESTOCK }
+    public enum Kind { CLEAR, SORT, RESTOCK, FETCH }
 
     private boolean active;
     private Kind kind = Kind.CLEAR;
@@ -141,6 +141,24 @@ public final class ClearInventoryMode {
         Chat.info("Restock " + shops.name(shop) + ": " + sb + ". " + (pendingByChest.size() + takeByChest.size()) + " stop(s); pick up in the warehouse first, then deliver.");
     }
 
+    /** Gather the given items from warehouse chests into the inventory (no deliveries); ends when they are all carried. */
+    public void startFetch(Minecraft mc, Map<ItemKey, Integer> needed, Map<ItemKey, String> names, String title) {
+        if (active) exit("Previous route cancelled.");
+        restockNeeded.clear();
+        restockNames.clear();
+        restockStartStock.clear();
+        restockNeeded.putAll(needed);
+        restockNames.putAll(names);
+        if (restockNeeded.isEmpty()) return;
+        active = true;
+        kind = Kind.FETCH;
+        restockShopId = null;
+        lastAnnouncedNoRoom = -1;
+        lastStopSet = Set.of();
+        refresh(mc);
+        Chat.info(title + ": " + takeByChest.size() + " chest(s) to visit. Follow the particles; each chest shows what to take.");
+    }
+
     private static int warehouseStock(ItemKey key) {
         int n = 0;
         for (ContainerEntry e : WarehouseClient.index().holding(key)) {
@@ -163,11 +181,11 @@ public final class ClearInventoryMode {
 
     public void toggle(Minecraft mc, Kind wanted) {
         if (active && kind == wanted) {
-            exit((kind == Kind.SORT ? "Sort" : kind == Kind.RESTOCK ? "Restock" : "Clear-inventory") + " mode off.");
+            exit((kind == Kind.SORT ? "Sort" : kind == Kind.RESTOCK ? "Restock" : kind == Kind.FETCH ? "Gather" : "Clear-inventory") + " mode off.");
             return;
         }
-        if (wanted == Kind.RESTOCK) {
-            Chat.error("Use /warehouse shop restock to start a restock run.");
+        if (wanted == Kind.RESTOCK || wanted == Kind.FETCH) {
+            Chat.error("Use /warehouse shop restock or /warehouse craft route to start that route.");
             return;
         }
         if (!WarehouseClient.organizer().plan().isActive()) {
@@ -208,7 +226,7 @@ public final class ClearInventoryMode {
         if (!active || mc.player == null || mc.level == null) return;
         refresh(mc);
         if (pendingByChest.isEmpty() && takeByChest.isEmpty() && noRoomCount == 0) {
-            exit(kind == Kind.SORT ? "Everything sorted — sort mode off." : kind == Kind.RESTOCK ? "Restock delivered — route off." : "Inventory clear — clear-inventory mode off.");
+            exit(kind == Kind.SORT ? "Everything sorted — sort mode off." : kind == Kind.RESTOCK ? "Restock delivered — route off." : kind == Kind.FETCH ? "Everything gathered — route off." : "Inventory clear — clear-inventory mode off.");
             return;
         }
         if (noRoomCount != lastAnnouncedNoRoom && noRoomCount > 0) {
@@ -224,7 +242,7 @@ public final class ClearInventoryMode {
         takeByChest.clear();
         takeLabels.clear();
         noRoomCount = 0;
-        if (kind == Kind.RESTOCK) {
+        if (kind == Kind.RESTOCK || kind == Kind.FETCH) {
             refreshRestock(mc);
             return;
         }
@@ -247,27 +265,37 @@ public final class ClearInventoryMode {
 
     /** RESTOCK: carried restock items go to the shop; whatever is still missing is picked up from warehouse chests. */
     private void refreshRestock(Minecraft mc) {
-        dev.warehouse.shops.Shop shop = WarehouseClient.shops().byId(restockShopId);
-        if (shop == null) {
+        boolean fetchOnly = kind == Kind.FETCH;
+        dev.warehouse.shops.Shop shop = fetchOnly ? null : WarehouseClient.shops().byId(restockShopId);
+        if (!fetchOnly && shop == null) {
             restockNeeded.clear();
             return;
         }
-        Map<ItemKey, Integer> shopStock = WarehouseClient.shops().stock(shop, new LinkedHashMap<>());
-        List<ContainerEntry> shopChests = WarehouseClient.shops().containers(shop);
-        Inventory inv = mc.player.getInventory();
+        Map<ItemKey, Integer> shopStock = fetchOnly ? Map.of() : WarehouseClient.shops().stock(shop, new LinkedHashMap<>());
+        List<ContainerEntry> shopChests = fetchOnly ? List.of() : WarehouseClient.shops().containers(shop);
         for (var it = restockNeeded.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<ItemKey, Integer> en = it.next();
             ItemKey key = en.getKey();
             int need = en.getValue();
-            Integer start = restockStartStock.get(key);
-            if (start == null) restockStartStock.put(key, start = shopStock.getOrDefault(key, 0));
-            int delivered = Math.max(0, shopStock.getOrDefault(key, 0) - start);
-            int remaining = need - delivered;
-            if (remaining <= 0) {
-                it.remove();
-                continue;
-            }
             int inHand = carried(mc, key);
+            int remaining;
+            if (fetchOnly) {
+                remaining = need - inHand;
+                if (remaining <= 0) {
+                    it.remove();
+                    continue;
+                }
+                inHand = 0; // nothing to deliver; everything still missing is fetched
+            } else {
+                Integer start = restockStartStock.get(key);
+                if (start == null) restockStartStock.put(key, start = shopStock.getOrDefault(key, 0));
+                int delivered = Math.max(0, shopStock.getOrDefault(key, 0) - start);
+                remaining = need - delivered;
+                if (remaining <= 0) {
+                    it.remove();
+                    continue;
+                }
+            }
             if (inHand > 0) {
                 ContainerEntry dest = shopDestination(shopChests, key);
                 if (dest != null) {
@@ -311,8 +339,14 @@ public final class ClearInventoryMode {
 
     /** Units of this item still wanted at the shop for the active restock, 0 if none. */
     public int restockWanted(ItemKey key) {
-        if (!active || kind != Kind.RESTOCK) return 0;
+        if (!active || (kind != Kind.RESTOCK && kind != Kind.FETCH)) return 0;
+        if (kind == Kind.FETCH) return Math.max(0, restockNeeded.getOrDefault(key, 0) - carried(Minecraft.getInstance(), key));
         return restockNeeded.getOrDefault(key, 0);
+    }
+
+    /** True while a fetch/restock route wants pick-ups and this chest is one of its sources. */
+    public boolean isFetchSource(UUID containerId) {
+        return active && (kind == Kind.RESTOCK || kind == Kind.FETCH) && takeByChest.containsKey(containerId);
     }
 
     private void updateRoute(Minecraft mc) {
@@ -321,7 +355,7 @@ public final class ClearInventoryMode {
         int freeSlots = 0;
         for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) if (inv.getItem(i).isEmpty()) freeSlots++;
         // Pick-ups only count while there is room to carry; otherwise offload first.
-        if ((kind == Kind.SORT || kind == Kind.RESTOCK) && freeSlots >= 4) stops.addAll(takeByChest.keySet());
+        if ((kind == Kind.SORT || kind == Kind.RESTOCK || kind == Kind.FETCH) && freeSlots >= 4) stops.addAll(takeByChest.keySet());
         if (stops.isEmpty()) stops.addAll(takeByChest.keySet());
         boolean changed = !stops.equals(lastStopSet);
         if (!changed && ++routeTick % 60 != 0) return;
@@ -339,6 +373,7 @@ public final class ClearInventoryMode {
     /** Destination for an inventory stack while the mode is active; null if essential, no plan, or no room. */
     public @Nullable ContainerEntry destinationFor(Minecraft mc, ItemStack stack, int inventorySlot) {
         if (!active || stack.isEmpty()) return null;
+        if (kind == Kind.FETCH) return null;
         if (kind == Kind.RESTOCK) {
             ItemKey k = Fingerprinter.key(stack);
             if (!restockNeeded.containsKey(k)) return null;
@@ -411,7 +446,7 @@ public final class ClearInventoryMode {
                 if (next) Gizmos.line(new Vec3(c.x, box.maxY, c.z), new Vec3(c.x, box.maxY + 8, c.z), ARGB.color(150, color), 2.0F).setAlwaysOnTop();
                 double d = c.distanceToSqr(eye);
                 if (d < 48 * 48 || next) {
-                    String head = (i + 1) + (take && deposit ? "  take + deposit" : take ? (kind == Kind.RESTOCK ? "  pick up" : "  take " + takeByChest.get(e.id) + " misplaced") : (kind == Kind.RESTOCK ? "  deliver" : "  deposit"));
+                    String head = (i + 1) + (take && deposit ? "  take + deposit" : take ? (kind == Kind.RESTOCK || kind == Kind.FETCH ? "  pick up" : "  take " + takeByChest.get(e.id) + " misplaced") : (kind == Kind.RESTOCK ? "  deliver" : "  deposit"));
                     Gizmos.billboardText(head, new Vec3(c.x, box.maxY + 0.55, c.z), TextGizmo.Style.forColorAndCentered(next ? 0xFFFFFFFF : color).withScale(next ? 0.4F : 0.3F)).setAlwaysOnTop();
                     if ((deposit || takeLabels.containsKey(e.id)) && (next || d < 16 * 16)) {
                         List<String> labels = deposit ? pendingByChest.get(e.id) : takeLabels.get(e.id);

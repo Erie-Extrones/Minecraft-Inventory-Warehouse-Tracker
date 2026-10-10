@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "warehouse_jei",
+  "version": "${version}",
+  "name": "Warehouse: JEI",
+  "description": "JEI integration for the Warehouse mod: find any JEI item in your warehouse, plan a craft from JEI, and let the craft planner use JEI's recipes.",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.warehouse.jei.WarehouseJeiClient"
+    ],
+    "jei_mod_plugin": [
+      "dev.warehouse.jei.WarehouseJeiPlugin"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*",
+    "warehouse": "*",
+    "jei": ">=31.0.0"
+  }
+}

@@ -11,7 +11,10 @@ Client-only Fabric mod that remembers where your items live, decides which chest
 - Misplaced tab and **Sort route**: walk a numbered tour to pull wrong-chest items and put them where they belong. Clear-inventory mode does the same for whatever you carry.
 - 23 categories including Colored Blocks, Workstations, Enchanting, Keys & Currency, Infinite Items and Collectibles; plugin items (ExecutableItems, ExcellentCrates, ItemsAdder, MMOItems) are recognised and grouped by pack.
 - Lost log for drops and deaths, export/import between PCs, chests that disappear are forgotten automatically.
-- **Overview** tab: the warehouse at a glance (containers, zone fill, misplaced, lost, low zones, values, shops), plus a stock check that lights up every container until opened.
+- **Crafting planner**: `/warehouse craft <count> [item]` expands recipes, uses your inventory then the warehouse, crafts intermediates, and pins a colour-coded shopping list to the screen; a gather route walks you to the chests.
+- **JEI add-on** (`warehouse-jei`): find the JEI item under the mouse in your warehouse, plan a craft of it, and let the planner use JEI's recipes.
+- `/warehouse keep` marks the held item as essential.
+- **Overview** dashboard: stat tiles, items-by-category donut, zone fill bars and attention chips on one screen, plus a stock check that lights up every container until opened.
 - **Prices and values.** Shop chat (QuickShop-style blocks and purchase/sale lines) and ChestShop-style signs are recorded automatically, or add prices by hand. Items are valued at the median; tooltips, the sneak card, the Overview and `/warehouse value` show item, chest, inventory and warehouse values.
 - **Player shops.** Shop regions with their own price list, walk-through inventory counts that unhighlight each chest as you open it, a report with low/out items, value and sales since last count, reminders when an inventory is due, and a restock route from the warehouse.
 - **Condense** tab: when a zone runs low on slots the mod suggests which bulk items to pack into shulker boxes, how many slots that frees, and which chest the packed shulker goes back into.

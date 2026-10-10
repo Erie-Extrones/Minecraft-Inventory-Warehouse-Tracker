@@ -111,6 +111,7 @@ public final class WarehouseCommands {
 
         ExtraCommands.attach(root);
         ShopCommands.attach(root);
+        CraftCommands.attach(root, ctx);
         dispatcher.register(root);
     }
 

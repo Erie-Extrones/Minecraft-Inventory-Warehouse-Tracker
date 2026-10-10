@@ -138,6 +138,9 @@ public final class ModConfig {
     /** Default restock threshold as a fraction of the most of an item the shop ever held. */
     public double shopRestockFraction = 0.25;
     public int stockCheckColor = 0xFFFFD040;
+    /** Pin the active craft plan's shopping list to the top right of the screen. */
+    public boolean shoppingListHud = true;
+    public int shoppingListMaxRows = 10;
 
     public static final class PricePattern {
         public String regex = "";
