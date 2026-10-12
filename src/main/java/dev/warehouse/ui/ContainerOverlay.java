@@ -123,14 +123,15 @@ public final class ContainerOverlay {
         List<Slot> out = new ArrayList<>();
         ClearInventoryMode mode = WarehouseClient.clearMode();
         if (mc.player == null || s.entry == null || !mode.isFetchSource(s.entry.id)) return out;
-        java.util.Map<dev.warehouse.items.ItemKey, Integer> remaining = new java.util.HashMap<>();
+        java.util.Map<dev.warehouse.shops.StockUnit, Integer> remaining = new java.util.HashMap<>();
         for (Slot slot : s.menu.slots) {
             if (slot.container == mc.player.getInventory() || !slot.hasItem()) continue;
-            dev.warehouse.items.ItemKey k = Fingerprinter.key(slot.getItem());
-            int want = remaining.computeIfAbsent(k, mode::restockWanted);
+            ItemStack st = slot.getItem();
+            dev.warehouse.shops.StockUnit u = dev.warehouse.shops.StockUnit.of(st);
+            int want = remaining.computeIfAbsent(u, k -> mode.restockWanted(st));
             if (want <= 0) continue;
             out.add(slot);
-            remaining.put(k, want - slot.getItem().getCount());
+            remaining.put(u, want - st.getCount());
         }
         return out;
     }

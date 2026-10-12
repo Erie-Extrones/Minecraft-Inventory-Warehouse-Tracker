@@ -21,13 +21,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Shops live in Shop regions; this keeps their price lists, thresholds and inventory history and builds the stock report. */
+/**
+ * Shops live in Shop regions; this keeps their price lists, thresholds and inventory history and builds the stock report.
+ * Stock is counted in {@link StockUnit}s, so a chest of shulkers full of logs is "shulker of logs" units, not loose logs.
+ */
 public final class ShopManager {
     public enum Status { OK, LOW, OUT }
 
-    /** One item of a shop's stock report. {@code soldSinceLast} is the drop since the previous inventory, never negative. */
-    public record ItemReport(ItemKey key, String name, int count, int threshold, Status status, @Nullable Double sellPrice, boolean marketPrice,
-                             double value, int soldSinceLast, int maxSeen) {}
+    /** One unit of a shop's stock report. {@code soldSinceLast} is the drop since the previous inventory, never negative. */
+    public record ItemReport(StockUnit unit, String name, int count, int threshold, Status status, @Nullable Double sellPrice, boolean marketPrice,
+                             double value, int soldSinceLast, int maxSeen) {
+        public ItemKey key() {
+            return unit.key;
+        }
+    }
 
     public record Report(Shop shop, Region region, List<ItemReport> items, int containers, double value, int low, int out, double revenueSinceLast,
                          long sinceEpochMs) {}
@@ -112,23 +119,24 @@ public final class ShopManager {
         return out;
     }
 
-    /** Current stock from the index, shulker contents included. */
-    public Map<ItemKey, Integer> stock(Shop s, Map<ItemKey, String> namesOut) {
-        Map<ItemKey, Integer> counts = new LinkedHashMap<>();
-        for (ContainerEntry e : containers(s)) for (StackRecord r : e.contents) add(counts, namesOut, r);
+    /** Current stock from the index, in units: loose stacks as their item, boxes with contents as packed units. */
+    public Map<StockUnit, Integer> stock(Shop s, Map<StockUnit, String> namesOut) {
+        Map<StockUnit, Integer> counts = new LinkedHashMap<>();
+        for (ContainerEntry e : containers(s)) {
+            for (StackRecord r : e.contents) {
+                StockUnit u = StockUnit.of(r);
+                counts.merge(u, r.count, Integer::sum);
+                namesOut.putIfAbsent(u, u.name(r.displayName));
+            }
+        }
         return counts;
     }
 
-    private static void add(Map<ItemKey, Integer> counts, Map<ItemKey, String> names, StackRecord r) {
-        if (r.nested != null && !r.nested.isEmpty()) {
-            for (StackRecord n : r.nested) add(counts, names, n);
-            return;
-        }
-        counts.merge(r.key, r.count, Integer::sum);
-        if (r.displayName != null) names.putIfAbsent(r.key, r.displayName);
+    /** Key under which a unit's shop price and threshold are stored: packed units get their own, plain ones share the item's price key. */
+    public static String priceKey(StockUnit u) {
+        return u.packed() ? "unit:" + u.unitKey() : PriceKeys.of(u.key);
     }
 
-    /** Prices and thresholds are keyed by price key (see {@link PriceKeys}), so every variant of a custom item shares them. */
     public void setSellPrice(Shop s, String priceKey, @Nullable Double price) {
         if (price == null) s.sellPrices.remove(priceKey);
         else s.sellPrices.put(priceKey, price);
@@ -141,31 +149,50 @@ public final class ShopManager {
         store.markDirty();
     }
 
-    public @Nullable Double sellPrice(Shop s, ItemKey key) {
-        return s.sellPrices.get(PriceKeys.of(key));
+    /** The shop's own price for a unit; a packed unit falls back to the price recorded for its box item (what QuickShop reports). */
+    public @Nullable Double sellPrice(Shop s, StockUnit u) {
+        Double p = s.sellPrices.get(priceKey(u));
+        if (p == null && u.packed()) p = s.sellPrices.get(PriceKeys.of(u.key));
+        return p;
     }
 
-    /** Unit price for valuing stock: the shop's own price, else the market value. */
-    public @Nullable Double unitPrice(Shop s, ItemKey key, boolean[] marketOut) {
-        Double p = sellPrice(s, key);
+    /** Unit price for valuing stock: the shop's own price, else the market value (box plus contents for packed units). */
+    public @Nullable Double unitPrice(Shop s, StockUnit u, boolean[] marketOut) {
+        Double p = sellPrice(s, u);
         if (p != null) {
             marketOut[0] = false;
             return p;
         }
-        Valuation.Value v = WarehouseClient.valuation().unitValue(key);
         marketOut[0] = true;
-        return v != null ? v.unit() : null;
+        return marketValue(u);
     }
 
-    public int maxSeen(Shop s, ItemKey key, int current) {
+    public static @Nullable Double marketValue(StockUnit u) {
+        Valuation val = WarehouseClient.valuation();
+        Valuation.Value box = val.unitValue(u.key);
+        if (!u.packed() || u.perBox == null) return box != null ? box.unit() : null;
+        double sum = box != null ? box.unit() : 0;
+        boolean any = box != null;
+        for (StackRecord n : u.perBox) {
+            Valuation.Value v = val.unitValue(n.key);
+            if (v != null) {
+                sum += v.unit() * n.count;
+                any = true;
+            }
+        }
+        return any ? sum : null;
+    }
+
+    public int maxSeen(Shop s, StockUnit u, int current) {
         int max = current;
-        String k = key.asString();
+        String k = u.unitKey();
         for (Shop.Snapshot snap : s.history) max = Math.max(max, snap.counts.getOrDefault(k, 0));
         return max;
     }
 
-    public int threshold(Shop s, ItemKey key, int maxSeen) {
-        Integer o = s.restockMin.get(PriceKeys.of(key));
+    public int threshold(Shop s, StockUnit u, int maxSeen) {
+        Integer o = s.restockMin.get(priceKey(u));
+        if (o == null && u.packed()) o = s.restockMin.get(PriceKeys.of(u.key));
         if (o != null) return o;
         double f = Math.max(0, Math.min(1, ConfigIO.get().shopRestockFraction));
         return Math.max(1, (int) Math.floor(maxSeen * f));
@@ -173,35 +200,35 @@ public final class ShopManager {
 
     public Report report(Shop s) {
         Region r = region(s);
-        Map<ItemKey, String> names = new LinkedHashMap<>();
-        Map<ItemKey, Integer> stock = stock(s, names);
+        Map<StockUnit, String> names = new LinkedHashMap<>();
+        Map<StockUnit, Integer> stock = stock(s, names);
         Shop.Snapshot last = s.history.isEmpty() ? null : s.history.get(s.history.size() - 1);
-        // Items that were stocked before but are gone now still belong on the report as OUT.
+        // Units that were stocked before but are gone now still belong on the report as OUT.
         if (last != null) for (Map.Entry<String, Integer> en : last.counts.entrySet()) {
-            ItemKey k = ItemKey.parse(en.getKey());
-            if (!stock.containsKey(k) && en.getValue() > 0) {
-                stock.put(k, 0);
-                names.putIfAbsent(k, last.names.getOrDefault(en.getKey(), PriceKeys.displayName(k)));
+            StockUnit u = StockUnit.parse(en.getKey(), last.templates != null ? last.templates.get(en.getKey()) : null);
+            if (!stock.containsKey(u) && en.getValue() > 0) {
+                stock.put(u, 0);
+                names.putIfAbsent(u, last.names.getOrDefault(en.getKey(), u.name(null)));
             }
         }
         List<ItemReport> items = new ArrayList<>();
         double value = 0, revenue = 0;
         int low = 0, out = 0;
-        for (Map.Entry<ItemKey, Integer> en : stock.entrySet()) {
-            ItemKey key = en.getKey();
+        for (Map.Entry<StockUnit, Integer> en : stock.entrySet()) {
+            StockUnit u = en.getKey();
             int count = en.getValue();
-            int maxSeen = maxSeen(s, key, count);
-            int threshold = threshold(s, key, maxSeen);
+            int maxSeen = maxSeen(s, u, count);
+            int threshold = threshold(s, u, maxSeen);
             Status status = count == 0 ? Status.OUT : count < threshold ? Status.LOW : Status.OK;
             if (status == Status.LOW) low++;
             if (status == Status.OUT) out++;
             boolean[] market = {false};
-            Double unit = unitPrice(s, key, market);
+            Double unit = unitPrice(s, u, market);
             double v = unit != null ? unit * count : 0;
             value += v;
-            int sold = last != null ? Math.max(0, last.counts.getOrDefault(key.asString(), 0) - count) : 0;
+            int sold = last != null ? Math.max(0, last.counts.getOrDefault(u.unitKey(), 0) - count) : 0;
             if (unit != null) revenue += sold * unit;
-            items.add(new ItemReport(key, names.getOrDefault(key, PriceKeys.displayName(key)), count, threshold, status, unit, market[0], v, sold, maxSeen));
+            items.add(new ItemReport(u, names.getOrDefault(u, u.name(null)), count, threshold, status, unit, market[0], v, sold, maxSeen));
         }
         items.sort(Comparator.comparing((ItemReport i) -> i.status() == Status.OUT ? 0 : i.status() == Status.LOW ? 1 : 2).thenComparing(Comparator.comparingDouble(ItemReport::value).reversed()));
         return new Report(s, r, items, containers(s).size(), value, low, out, revenue, last != null ? last.whenEpochMs : 0);
@@ -216,8 +243,10 @@ public final class ShopManager {
         snap.value = rep.value();
         for (ItemReport i : rep.items()) {
             if (i.count() <= 0) continue;
-            snap.counts.put(i.key().asString(), i.count());
-            snap.names.put(i.key().asString(), i.name());
+            String k = i.unit().unitKey();
+            snap.counts.put(k, i.count());
+            snap.names.put(k, i.name());
+            if (i.unit().packed() && i.unit().perBox != null) snap.templates.put(k, i.unit().perBox);
         }
         s.history.add(snap);
         while (s.history.size() > MAX_HISTORY) s.history.remove(0);

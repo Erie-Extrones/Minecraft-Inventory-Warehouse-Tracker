@@ -756,7 +756,7 @@ public final class SearchScreen extends Screen {
             String detail = "stock " + i.count() + " / min " + i.threshold() + "  \u00b7  " + price + (i.soldSinceLast() > 0 ? "  \u00b7  sold " + i.soldSinceLast() + " since last" : "");
             List<Component> tip = new ArrayList<>();
             tip.add(Component.literal(i.name()).withStyle(ChatFormatting.WHITE));
-            tip.add(Component.literal("Most ever stocked: " + i.maxSeen() + "; threshold " + i.threshold() + (shop.restockMin.containsKey(dev.warehouse.prices.PriceKeys.of(i.key())) ? " (set by you)" : " (25% of max; /warehouse shop min <n> while holding it)")).withStyle(ChatFormatting.GRAY));
+            tip.add(Component.literal("Most ever stocked: " + i.maxSeen() + "; threshold " + i.threshold() + (shop.restockMin.containsKey(dev.warehouse.shops.ShopManager.priceKey(i.unit())) ? " (set by you)" : " (25% of max; /warehouse shop min <n> while holding it)")).withStyle(ChatFormatting.GRAY));
             tip.add(Component.literal(i.sellPrice() == null ? "Set the shop price: hold it and /warehouse shop price <amount>" : "Worth " + dev.warehouse.prices.Valuation.money(i.value()) + " at " + price).withStyle(ChatFormatting.GRAY));
             tip.add(Component.literal("Click: highlight the shop chests holding it. Shift-click: also the warehouse chests.").withStyle(ChatFormatting.DARK_GRAY));
             final var key = i.key();
@@ -765,8 +765,9 @@ public final class SearchScreen extends Screen {
                 int secs = ConfigIO.get().highlightSeconds;
                 int n = 0;
                 for (ContainerEntry e : shops.containers(shop)) {
-                    if (e.totalCount(key) > 0) {
-                        WarehouseClient.highlights().containerForItem(e, key, ConfigIO.get().shopColor, secs, name + " ×" + e.totalCount(key), n++ == 0, "shop");
+                    int here = i.unit().countIn(e, false);
+                    if (here > 0) {
+                        WarehouseClient.highlights().containerForItem(e, key, ConfigIO.get().shopColor, secs, name + " ×" + here, n++ == 0, "shop");
                     }
                 }
                 if (sh) for (ContainerEntry e : WarehouseClient.index().holding(key)) {
@@ -782,7 +783,7 @@ public final class SearchScreen extends Screen {
                             Chat.error("Type the price in the amount box first.");
                             return;
                         }
-                        shops.setSellPrice(shop, dev.warehouse.prices.PriceKeys.of(key), amount);
+                        shops.setSellPrice(shop, dev.warehouse.shops.ShopManager.priceKey(i.unit()), amount);
                         rebuild();
                     }),
                     new RowButton("Min", sh -> {
@@ -791,7 +792,7 @@ public final class SearchScreen extends Screen {
                             Chat.error("Type the threshold in the amount box first.");
                             return;
                         }
-                        shops.setRestockMin(shop, dev.warehouse.prices.PriceKeys.of(key), min);
+                        shops.setRestockMin(shop, dev.warehouse.shops.ShopManager.priceKey(i.unit()), min);
                         rebuild();
                     }),
                     new RowButton("Plan", sh -> {
@@ -802,7 +803,7 @@ public final class SearchScreen extends Screen {
                             return;
                         }
                         WarehouseClient.craftPlanner().start(minecraft, "Restock " + want + " × " + name + " for " + shops.name(shop), ic,
-                                List.of(new dev.warehouse.craft.CraftPlanner.Request(ic, want, null, false)));
+                                List.of(new dev.warehouse.craft.CraftPlanner.Request(ic, want, i.unit().perBox, false)));
                         switchTab(Tab.CRAFT);
                     })));
         }

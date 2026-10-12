@@ -56,9 +56,9 @@ public final class ClearInventoryMode {
     private final Map<UUID, List<String>> takeLabels = new LinkedHashMap<>();
     // RESTOCK state
     private @Nullable UUID restockShopId;
-    /** Item key -> units still to bring to the shop. */
-    private final Map<ItemKey, Integer> restockNeeded = new LinkedHashMap<>();
-    private final Map<ItemKey, String> restockNames = new LinkedHashMap<>();
+    /** Stock unit -> units still to bring to the shop (or to gather). */
+    private final Map<dev.warehouse.shops.StockUnit, Integer> restockNeeded = new LinkedHashMap<>();
+    private final Map<dev.warehouse.shops.StockUnit, String> restockNames = new LinkedHashMap<>();
     private List<ContainerEntry> route = List.of();
     private int routeTick;
     private Set<UUID> lastStopSet = Set.of();
@@ -93,7 +93,7 @@ public final class ClearInventoryMode {
         return active && kind == Kind.RESTOCK ? restockShopId : null;
     }
 
-    public Map<ItemKey, Integer> restockNeeded() {
+    public Map<dev.warehouse.shops.StockUnit, Integer> restockNeeded() {
         return restockNeeded;
     }
 
@@ -106,20 +106,32 @@ public final class ClearInventoryMode {
         restockNames.clear();
         restockStartStock.clear();
         int noStock = 0;
+        List<dev.warehouse.craft.CraftPlanner.Request> build = new ArrayList<>();
         for (dev.warehouse.shops.ShopManager.ItemReport i : rep.items()) {
             if (i.status() == dev.warehouse.shops.ShopManager.Status.OK) continue;
             int need = Math.max(0, Math.max(i.threshold(), Math.min(i.maxSeen(), i.threshold() * 2)) - i.count());
             if (need <= 0) continue;
-            int available = warehouseStock(i.key()) + carried(mc, i.key());
-            if (available <= 0) {
-                noStock++;
-                continue;
+            dev.warehouse.shops.StockUnit unit = i.unit();
+            int available = warehouseStock(unit, false) + carried(mc, unit);
+            int fromStock = Math.min(need, available);
+            if (fromStock > 0) {
+                restockNeeded.put(unit, fromStock);
+                restockNames.put(unit, i.name());
             }
-            restockNeeded.put(i.key(), Math.min(need, available));
-            restockNames.put(i.key(), i.name());
+            int toBuild = need - fromStock;
+            if (toBuild > 0) {
+                ItemStack icon = dev.warehouse.items.CategoryResolver.sampleStack(unit.key);
+                if (icon != null) build.add(new dev.warehouse.craft.CraftPlanner.Request(icon, toBuild, unit.perBox, false));
+                else noStock++;
+            }
+        }
+        if (!build.isEmpty()) {
+            // What the warehouse does not hold ready-made goes to the planner: packed shulkers get boxes plus contents.
+            WarehouseClient.craftPlanner().start(mc, "Build for " + shops.name(shop), build.get(0).stack(), build);
         }
         if (restockNeeded.isEmpty()) {
-            Chat.info("Nothing to restock at " + shops.name(shop) + (noStock > 0 ? " that the warehouse has in stock (" + noStock + " item type(s) are low but unavailable)." : "."));
+            Chat.info("Nothing to carry over from the warehouse for " + shops.name(shop) + (build.isEmpty() ? "." : "; the shopping list shows what to build first.")
+                    + (noStock > 0 ? " " + noStock + " unit(s) are low but cannot be made." : ""));
             return;
         }
         active = true;
@@ -130,7 +142,7 @@ public final class ClearInventoryMode {
         refresh(mc);
         StringBuilder sb = new StringBuilder();
         int shown = 0;
-        for (Map.Entry<ItemKey, Integer> en : restockNeeded.entrySet()) {
+        for (Map.Entry<dev.warehouse.shops.StockUnit, Integer> en : restockNeeded.entrySet()) {
             if (shown++ >= 4) {
                 sb.append(", +").append(restockNeeded.size() - 4).append(" more");
                 break;
@@ -147,8 +159,8 @@ public final class ClearInventoryMode {
         restockNeeded.clear();
         restockNames.clear();
         restockStartStock.clear();
-        restockNeeded.putAll(needed);
-        restockNames.putAll(names);
+        for (Map.Entry<ItemKey, Integer> en : needed.entrySet()) restockNeeded.put(dev.warehouse.shops.StockUnit.plain(en.getKey()), en.getValue());
+        for (Map.Entry<ItemKey, String> en : names.entrySet()) restockNames.put(dev.warehouse.shops.StockUnit.plain(en.getKey()), en.getValue());
         if (restockNeeded.isEmpty()) return;
         active = true;
         kind = Kind.FETCH;
@@ -159,23 +171,29 @@ public final class ClearInventoryMode {
         Chat.info(title + ": " + takeByChest.size() + " chest(s) to visit. Follow the particles; each chest shows what to take.");
     }
 
-    private static int warehouseStock(ItemKey key) {
-        int n = 0;
-        for (ContainerEntry e : WarehouseClient.index().holding(key)) {
+    /** Warehouse chests holding the unit, most first. Loose items inside boxes only count when {@code includeNested}. */
+    private static List<ContainerEntry> warehouseHolders(dev.warehouse.shops.StockUnit unit, boolean includeNested) {
+        List<ContainerEntry> out = new ArrayList<>();
+        for (ContainerEntry e : WarehouseClient.index().all()) {
             dev.warehouse.region.Region r = WarehouseClient.regions().byId(e.regionId);
-            if (r != null && r.type == dev.warehouse.region.RegionType.WAREHOUSE) n += e.totalCount(key);
+            if (r == null || r.type != dev.warehouse.region.RegionType.WAREHOUSE) continue;
+            if (unit.countIn(e, includeNested) > 0) out.add(e);
         }
+        out.sort((a, b) -> Integer.compare(unit.countIn(b, includeNested), unit.countIn(a, includeNested)));
+        return out;
+    }
+
+    private static int warehouseStock(dev.warehouse.shops.StockUnit unit, boolean includeNested) {
+        int n = 0;
+        for (ContainerEntry e : warehouseHolders(unit, includeNested)) n += unit.countIn(e, includeNested);
         return n;
     }
 
-    private static int carried(Minecraft mc, ItemKey key) {
+    private static int carried(Minecraft mc, dev.warehouse.shops.StockUnit unit) {
         int n = 0;
         if (mc.player == null) return 0;
         Inventory inv = mc.player.getInventory();
-        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
-            ItemStack st = inv.getItem(i);
-            if (!st.isEmpty() && key.equals(Fingerprinter.key(st))) n += st.getCount();
-        }
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) n += unit.matches(inv.getItem(i));
         return n;
     }
 
@@ -271,11 +289,11 @@ public final class ClearInventoryMode {
             restockNeeded.clear();
             return;
         }
-        Map<ItemKey, Integer> shopStock = fetchOnly ? Map.of() : WarehouseClient.shops().stock(shop, new LinkedHashMap<>());
+        Map<dev.warehouse.shops.StockUnit, Integer> shopStock = fetchOnly ? Map.of() : WarehouseClient.shops().stock(shop, new LinkedHashMap<>());
         List<ContainerEntry> shopChests = fetchOnly ? List.of() : WarehouseClient.shops().containers(shop);
         for (var it = restockNeeded.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<ItemKey, Integer> en = it.next();
-            ItemKey key = en.getKey();
+            Map.Entry<dev.warehouse.shops.StockUnit, Integer> en = it.next();
+            dev.warehouse.shops.StockUnit key = en.getKey();
             int need = en.getValue();
             int inHand = carried(mc, key);
             int remaining;
@@ -307,10 +325,8 @@ public final class ClearInventoryMode {
             }
             int toFetch = remaining - inHand;
             if (toFetch > 0) {
-                for (ContainerEntry e : WarehouseClient.index().holding(key)) {
-                    dev.warehouse.region.Region r = WarehouseClient.regions().byId(e.regionId);
-                    if (r == null || r.type != dev.warehouse.region.RegionType.WAREHOUSE) continue;
-                    int here = Math.min(e.totalCount(key), toFetch);
+                for (ContainerEntry e : warehouseHolders(key, fetchOnly)) {
+                    int here = Math.min(key.countIn(e, fetchOnly), toFetch);
                     takeByChest.merge(e.id, 1, Integer::sum);
                     takeLabels.computeIfAbsent(e.id, k -> new ArrayList<>()).add(restockNames.get(key) + " ×" + here);
                     toFetch -= here;
@@ -320,12 +336,12 @@ public final class ClearInventoryMode {
         }
     }
 
-    private final Map<ItemKey, Integer> restockStartStock = new LinkedHashMap<>();
+    private final Map<dev.warehouse.shops.StockUnit, Integer> restockStartStock = new LinkedHashMap<>();
 
-    private static @Nullable ContainerEntry shopDestination(List<ContainerEntry> shopChests, ItemKey key) {
+    private static @Nullable ContainerEntry shopDestination(List<ContainerEntry> shopChests, dev.warehouse.shops.StockUnit unit) {
         ContainerEntry best = null;
         for (ContainerEntry e : shopChests) {
-            if (e.totalCount(key) > 0 && (e.freeSlots() > 0 || hasPartial(e, key))) return e;
+            if (unit.countIn(e, false) > 0 && (e.freeSlots() > 0 || (!unit.packed() && hasPartial(e, unit.key)))) return e;
             if (best == null && e.freeSlots() > 0) best = e;
         }
         return best;
@@ -333,15 +349,16 @@ public final class ClearInventoryMode {
 
     private static boolean hasPartial(ContainerEntry e, ItemKey key) {
         int max = dev.warehouse.organizer.Allocator.maxStack(key);
-        for (var s : e.contents) if (key.equals(s.key) && s.count < max) return true;
+        for (var s : e.contents) if (key.equals(s.key) && (s.nested == null || s.nested.isEmpty()) && s.count < max) return true;
         return false;
     }
 
-    /** Units of this item still wanted at the shop for the active restock, 0 if none. */
-    public int restockWanted(ItemKey key) {
-        if (!active || (kind != Kind.RESTOCK && kind != Kind.FETCH)) return 0;
-        if (kind == Kind.FETCH) return Math.max(0, restockNeeded.getOrDefault(key, 0) - carried(Minecraft.getInstance(), key));
-        return restockNeeded.getOrDefault(key, 0);
+    /** Units of this stack's kind still wanted for the active restock or gather route, 0 if none. */
+    public int restockWanted(ItemStack stack) {
+        if (!active || (kind != Kind.RESTOCK && kind != Kind.FETCH) || stack.isEmpty()) return 0;
+        dev.warehouse.shops.StockUnit unit = dev.warehouse.shops.StockUnit.of(stack);
+        if (kind == Kind.FETCH) return Math.max(0, restockNeeded.getOrDefault(unit, 0) - carried(Minecraft.getInstance(), unit));
+        return restockNeeded.getOrDefault(unit, 0);
     }
 
     /** True while a fetch/restock route wants pick-ups and this chest is one of its sources. */
@@ -375,10 +392,10 @@ public final class ClearInventoryMode {
         if (!active || stack.isEmpty()) return null;
         if (kind == Kind.FETCH) return null;
         if (kind == Kind.RESTOCK) {
-            ItemKey k = Fingerprinter.key(stack);
-            if (!restockNeeded.containsKey(k)) return null;
+            dev.warehouse.shops.StockUnit u = dev.warehouse.shops.StockUnit.of(stack);
+            if (!restockNeeded.containsKey(u)) return null;
             dev.warehouse.shops.Shop shop = WarehouseClient.shops().byId(restockShopId);
-            return shop == null ? null : shopDestination(WarehouseClient.shops().containers(shop), k);
+            return shop == null ? null : shopDestination(WarehouseClient.shops().containers(shop), u);
         }
         if (isEssential(mc, stack, inventorySlot)) return null;
         Organizer organizer = WarehouseClient.organizer();
