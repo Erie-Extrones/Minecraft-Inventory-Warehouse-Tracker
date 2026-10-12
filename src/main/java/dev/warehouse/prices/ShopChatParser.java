@@ -6,6 +6,10 @@ import dev.warehouse.config.ConfigIO;
 import dev.warehouse.config.ModConfig;
 import dev.warehouse.region.RegionManager;
 import dev.warehouse.shops.Shop;
+import dev.warehouse.shops.ShopManager;
+import dev.warehouse.shops.StockUnit;
+import dev.warehouse.wand.WandHandler;
+import net.minecraft.core.BlockPos;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
@@ -31,7 +35,7 @@ public final class ShopChatParser {
     private static final Pattern MODE = Pattern.compile("(?i)^this shop is (selling|buying) items");
     private static final Pattern TX_HEAD = Pattern.compile("(?i)^successfully (purchased|sold):?\\s*(.*)$");
     private static final Pattern TX_LINE = Pattern.compile("(?i)^(\\d[\\d,]*)\\s*[x×]?\\s+(.+?)\\s+for\\s+\\$?\\s*([\\d,]+(?:\\.\\d+)?)\\s*$");
-    private static final long BLOCK_WINDOW_MS = 5000, TX_WINDOW_MS = 3000, OWNER_MEMORY_MS = 120_000;
+    private static final long BLOCK_WINDOW_MS = 5000, TX_WINDOW_MS = 3000, OWNER_MEMORY_MS = 120_000, CLICK_MEMORY_MS = 4000;
 
     private long blockStartMs;
     private @Nullable String owner, item;
@@ -147,22 +151,46 @@ public final class ShopChatParser {
         }
     }
 
-    /** Store a price; {@code sell} is from your point of view (true = you receive this). */
+    /** Store a price seen in chat; the shop block is the one clicked just before (QuickShop answers a click with its info). */
     public void record(String itemName, double unit, int qty, boolean sell, @Nullable String shop, String source) {
         Minecraft mc = Minecraft.getInstance();
-        String me = mc.player != null ? mc.player.getGameProfile().name() : null;
-        if (shop != null && me != null && shop.equalsIgnoreCase(me) && mc.level != null) {
-            // Our own shop: a SELLING shop's price is what customers pay us.
-            Shop own = WarehouseClient.shops().nearest(RegionManager.dimensionId(mc.level), mc.player.blockPosition(), 64);
-            if (own != null && !sell) {
-                WarehouseClient.shops().setSellPrice(own, PriceKeys.fromName(itemName), unit);
-                if (ConfigIO.get().announcePriceCapture) Chat.info(WarehouseClient.shops().name(own) + ": " + itemName + " sells for " + Valuation.money(unit) + " (recorded as your shop price).");
+        BlockPos at = mc.level != null ? WandHandler.recentClick(RegionManager.dimensionId(mc.level), CLICK_MEMORY_MS) : null;
+        record(itemName, unit, qty, sell, shop, source, at);
+    }
+
+    /**
+     * Store a price; {@code sell} is from your point of view (true = you receive this). {@code at} is the shop's sign or chest
+     * when known: a price for a shulker box there is filed under the packed box that chest holds ("Shulker Box of Oak Log"),
+     * not under empty shulker boxes, and a block inside one of your shop regions makes it your own shop's price.
+     */
+    public void record(String itemName, double unit, int qty, boolean sell, @Nullable String shop, String source, @Nullable BlockPos at) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) return;
+        String dim = RegionManager.dimensionId(mc.level);
+        ShopManager shops = WarehouseClient.shops();
+        String priceKey = PriceKeys.fromName(itemName);
+        String name = itemName;
+        if (at != null && priceKey.startsWith("item:") && priceKey.endsWith("shulker_box")) {
+            StockUnit u = shops.packedUnitNear(dim, at, new dev.warehouse.items.ItemKey(priceKey.substring(5), ""));
+            if (u != null) {
+                priceKey = ShopManager.priceKey(u);
+                name = u.name(itemName);
+            }
+        }
+        String me = mc.player.getGameProfile().name();
+        Shop own = at != null ? shops.shopAt(dim, at) : null;
+        if (own == null && shop != null && shop.equalsIgnoreCase(me)) own = shops.nearest(dim, mc.player.blockPosition(), 64);
+        if (own != null) {
+            // Our own shop: a SELLING shop's price is what customers pay us; what it buys for is not a market price either.
+            if (!sell) {
+                shops.setSellPrice(own, priceKey, unit);
+                if (ConfigIO.get().announcePriceCapture) Chat.info(shops.name(own) + ": " + name + " sells for " + Valuation.money(unit) + " (recorded as your shop price).");
             }
             return;
         }
-        boolean fresh = WarehouseClient.prices().add(new PriceObservation(PriceKeys.fromName(itemName), itemName, unit, qty, sell, shop, source));
+        boolean fresh = WarehouseClient.prices().add(new PriceObservation(priceKey, name, unit, qty, sell, shop, source));
         if (fresh && ConfigIO.get().announcePriceCapture) {
-            Chat.info("Price noted: " + itemName + " " + Valuation.money(unit) + " " + (sell ? "sell" : "buy") + (shop != null ? " at " + shop : "") + ".");
+            Chat.info("Price noted: " + name + " " + Valuation.money(unit) + " " + (sell ? "sell" : "buy") + (shop != null ? " at " + shop : "") + ".");
         }
     }
 

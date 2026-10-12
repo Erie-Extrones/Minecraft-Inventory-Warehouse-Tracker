@@ -6,6 +6,7 @@ import dev.warehouse.config.ConfigIO;
 import dev.warehouse.region.Region;
 import dev.warehouse.region.RegionManager;
 import dev.warehouse.region.RegionType;
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -33,6 +34,10 @@ public final class WandHandler {
     public static BlockPos lastUseBlockPos;
     public static long lastUseBlockTimeMs;
     public static String lastUseBlockDimension;
+    /** Last block hit with either mouse button: what a shop's chat info or sign refers to. */
+    public static BlockPos lastClickBlockPos;
+    public static long lastClickBlockTimeMs;
+    public static String lastClickBlockDimension;
 
     public WandHandler(RegionManager regions) {
         this.regions = regions;
@@ -40,6 +45,10 @@ public final class WandHandler {
 
     public void register() {
         UseBlockCallback.EVENT.register(this::onUseBlock);
+        AttackBlockCallback.EVENT.register((player, level, hand, pos, dir) -> {
+            if (level.isClientSide()) noteClick(level, pos);
+            return InteractionResult.PASS;
+        });
     }
 
     public static boolean isWand(ItemStack stack) {
@@ -50,9 +59,22 @@ public final class WandHandler {
         return item != null && stack.is(item);
     }
 
+    private static void noteClick(Level level, BlockPos pos) {
+        lastClickBlockPos = pos.immutable();
+        lastClickBlockTimeMs = System.currentTimeMillis();
+        lastClickBlockDimension = RegionManager.dimensionId(level);
+    }
+
+    /** The block clicked within the last few seconds in this dimension, else null. */
+    public static @org.jspecify.annotations.Nullable BlockPos recentClick(String dimension, long maxAgeMs) {
+        if (lastClickBlockPos == null || !dimension.equals(lastClickBlockDimension)) return null;
+        return System.currentTimeMillis() - lastClickBlockTimeMs <= maxAgeMs ? lastClickBlockPos : null;
+    }
+
     private InteractionResult onUseBlock(Player player, Level level, InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide()) return InteractionResult.PASS;
         // Record for the container resolver regardless of what is held.
+        noteClick(level, hit.getBlockPos());
         if (hand == InteractionHand.MAIN_HAND) {
             lastUseBlockPos = hit.getBlockPos();
             lastUseBlockTimeMs = System.currentTimeMillis();

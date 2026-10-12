@@ -64,6 +64,8 @@ public final class ClearInventoryMode {
     private Set<UUID> lastStopSet = Set.of();
     private int noRoomCount;
     private int lastAnnouncedNoRoom = -1;
+    /** Set once the "inventory full, offload first" hint went out for the current pick-up route. */
+    private boolean fullHinted;
 
     public boolean isActive() {
         return active;
@@ -87,6 +89,11 @@ public final class ClearInventoryMode {
 
     public void toggle(Minecraft mc) {
         toggle(mc, Kind.CLEAR);
+    }
+
+    /** True while clear or sort mode is lighting every inventory stack's destination (the held-item guide stands down then). */
+    public boolean lightsDestinations() {
+        return active && (kind == Kind.CLEAR || kind == Kind.SORT);
     }
 
     public @Nullable UUID restockShopId() {
@@ -218,9 +225,10 @@ public final class ClearInventoryMode {
 
     public void toggle(Minecraft mc, Kind wanted) {
         if (active && kind == wanted) {
-            exit((kind == Kind.SORT ? "Sort" : kind == Kind.RESTOCK ? "Restock" : kind == Kind.FETCH ? "Gather" : "Clear-inventory") + " mode off.");
+            exit(modeName() + " mode off.");
             return;
         }
+        if (active) exit(modeName() + " mode off."); // switching: start the new mode from a clean slate
         if (wanted == Kind.RESTOCK || wanted == Kind.FETCH) {
             Chat.error("Use /warehouse shop restock or /warehouse craft route to start that route.");
             return;
@@ -241,8 +249,13 @@ public final class ClearInventoryMode {
         }
     }
 
+    private String modeName() {
+        return kind == Kind.SORT ? "Sort" : kind == Kind.RESTOCK ? "Restock" : kind == Kind.FETCH ? "Gather" : "Clear-inventory";
+    }
+
     private void exit(String msg) {
         active = false;
+        fullHinted = false;
         pendingByChest.clear();
         colorByChest.clear();
         takeByChest.clear();
@@ -261,6 +274,10 @@ public final class ClearInventoryMode {
     /** Called every client tick. */
     public void tick(Minecraft mc) {
         if (!active || mc.player == null || mc.level == null) return;
+        if (kind == Kind.FETCH && WarehouseClient.craftPlanner().active() == null) {
+            exit("Gather route off: the craft plan is gone.");
+            return;
+        }
         refresh(mc);
         if (pendingByChest.isEmpty() && takeByChest.isEmpty() && noRoomCount == 0) {
             exit(kind == Kind.SORT ? "Everything sorted — sort mode off." : kind == Kind.RESTOCK ? "Restock delivered — route off." : kind == Kind.FETCH ? "Everything gathered — route off." : "Inventory clear — clear-inventory mode off.");
@@ -269,6 +286,15 @@ public final class ClearInventoryMode {
         if (noRoomCount != lastAnnouncedNoRoom && noRoomCount > 0) {
             lastAnnouncedNoRoom = noRoomCount;
             Chat.warn(noRoomCount + " stack(s) have no destination with room; they stay in your inventory.");
+        }
+        if ((kind == Kind.FETCH || kind == Kind.RESTOCK) && !takeByChest.isEmpty()) {
+            int free = freeSlots(mc);
+            if (free < 4 && !fullHinted) {
+                fullHinted = true;
+                Chat.warn("Your inventory is " + (free == 0 ? "full" : "nearly full") + ": put things away before picking up. Hold an item to see which chest it belongs in, or run /warehouse clearmode (then start this route again).");
+            } else if (free >= 4) {
+                fullHinted = false;
+            }
         }
         updateRoute(mc);
         render(mc);
@@ -385,11 +411,16 @@ public final class ClearInventoryMode {
         return active && (kind == Kind.RESTOCK || kind == Kind.FETCH) && takeByChest.containsKey(containerId);
     }
 
+    private static int freeSlots(Minecraft mc) {
+        Inventory inv = mc.player.getInventory();
+        int n = 0;
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) if (inv.getItem(i).isEmpty()) n++;
+        return n;
+    }
+
     private void updateRoute(Minecraft mc) {
         Set<UUID> stops = new LinkedHashSet<>(pendingByChest.keySet());
-        Inventory inv = mc.player.getInventory();
-        int freeSlots = 0;
-        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) if (inv.getItem(i).isEmpty()) freeSlots++;
+        int freeSlots = freeSlots(mc);
         // Pick-ups only count while there is room to carry; otherwise offload first.
         if ((kind == Kind.SORT || kind == Kind.RESTOCK || kind == Kind.FETCH) && freeSlots >= 4) stops.addAll(takeByChest.keySet());
         if (stops.isEmpty()) stops.addAll(takeByChest.keySet());

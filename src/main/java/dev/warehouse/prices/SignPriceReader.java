@@ -49,11 +49,11 @@ public final class SignPriceReader {
         ShopChatParser parser = WarehouseClient.shopChatParser();
         String shop = owner.isEmpty() ? null : owner.replaceAll("[\\[\\]]", "");
         if (b.find()) {
-            parser.record(item, Double.parseDouble(b.group(1)) / qty, qty, false, shop, "sign");
+            parser.record(item, Double.parseDouble(b.group(1)) / qty, qty, false, shop, "sign", pos);
             any = true;
         }
         if (s.find()) {
-            parser.record(item, Double.parseDouble(s.group(1)) / qty, qty, true, shop, "sign");
+            parser.record(item, Double.parseDouble(s.group(1)) / qty, qty, true, shop, "sign", pos);
             any = true;
         }
         if (!any) seen.remove(pos);
