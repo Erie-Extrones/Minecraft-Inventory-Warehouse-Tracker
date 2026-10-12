@@ -34,6 +34,15 @@ public final class TooltipProvider {
                     .append(Component.literal(dev.warehouse.prices.Valuation.money(value.unit()) + " each" + (stack.getCount() > 1 ? ", " + dev.warehouse.prices.Valuation.money(value.unit() * stack.getCount()) + " here" : "")).withStyle(ChatFormatting.YELLOW))
                     .append(Component.literal("  " + (value.sell() ? "sell" : "buy") + (value.fallback() ? " only" : "") + ", " + value.count() + " price" + (value.count() == 1 ? "" : "s")).withStyle(ChatFormatting.DARK_GRAY)));
         }
+        var usage = WarehouseClient.usage();
+        if (usage != null && usage.highlightArmed()) {
+            for (dev.warehouse.inventory.UsageTracker.Idle i : usage.idle()) {
+                if (i.key().equals(key)) {
+                    lines.add(Component.literal("Unused for " + dev.warehouse.inventory.UsageTracker.describe(i.idleMs()) + ", put it away to free the slot").withStyle(ChatFormatting.LIGHT_PURPLE));
+                    break;
+                }
+            }
+        }
         List<ContainerEntry> holders = WarehouseClient.index().holding(key);
         Organizer organizer = WarehouseClient.organizer();
         Organizer.Resolution dest = organizer.resolve(key);

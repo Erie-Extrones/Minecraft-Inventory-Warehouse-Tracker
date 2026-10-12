@@ -97,42 +97,61 @@ public final class ClearInventoryMode {
         return restockNeeded;
     }
 
-    /** Start a restock run: bring every LOW/OUT item of the shop up to its threshold from warehouse stock. */
-    public void startRestock(Minecraft mc, dev.warehouse.shops.Shop shop) {
-        if (active) exit("Previous route cancelled.");
-        dev.warehouse.shops.ShopManager shops = WarehouseClient.shops();
-        dev.warehouse.shops.ShopManager.Report rep = shops.report(shop);
-        restockNeeded.clear();
-        restockNames.clear();
-        restockStartStock.clear();
-        int noStock = 0;
-        List<dev.warehouse.craft.CraftPlanner.Request> build = new ArrayList<>();
-        for (dev.warehouse.shops.ShopManager.ItemReport i : rep.items()) {
+    /** Per unit a shop is short of: how many the warehouse and your inventory can supply now, and how many must be built. */
+    private record ShopNeed(dev.warehouse.shops.StockUnit unit, String name, int need, int fromStock, int toBuild) {}
+
+    private static List<ShopNeed> shopNeeds(Minecraft mc, dev.warehouse.shops.Shop shop) {
+        List<ShopNeed> out = new ArrayList<>();
+        for (dev.warehouse.shops.ShopManager.ItemReport i : WarehouseClient.shops().report(shop).items()) {
             if (i.status() == dev.warehouse.shops.ShopManager.Status.OK) continue;
             int need = Math.max(0, Math.max(i.threshold(), Math.min(i.maxSeen(), i.threshold() * 2)) - i.count());
             if (need <= 0) continue;
-            dev.warehouse.shops.StockUnit unit = i.unit();
-            int available = warehouseStock(unit, false) + carried(mc, unit);
+            int available = warehouseStock(i.unit(), false) + carried(mc, i.unit());
             int fromStock = Math.min(need, available);
-            if (fromStock > 0) {
-                restockNeeded.put(unit, fromStock);
-                restockNames.put(unit, i.name());
-            }
-            int toBuild = need - fromStock;
-            if (toBuild > 0) {
-                ItemStack icon = dev.warehouse.items.CategoryResolver.sampleStack(unit.key);
-                if (icon != null) build.add(new dev.warehouse.craft.CraftPlanner.Request(icon, toBuild, unit.perBox, false));
-                else noStock++;
-            }
+            out.add(new ShopNeed(i.unit(), i.name(), need, fromStock, need - fromStock));
         }
-        if (!build.isEmpty()) {
-            // What the warehouse does not hold ready-made goes to the planner: packed shulkers get boxes plus contents.
-            WarehouseClient.craftPlanner().start(mc, "Build for " + shops.name(shop), build.get(0).stack(), build);
+        return out;
+    }
+
+    /**
+     * What a restock of the shop must build because neither the warehouse nor your inventory holds it ready-made. Recomputed
+     * as the live source of the "Build for" plan, so built or delivered units drop off; null once the shop is gone.
+     */
+    public static @Nullable List<dev.warehouse.craft.CraftPlanner.Request> shopBuildRequests(Minecraft mc, dev.warehouse.shops.Shop shop) {
+        if (WarehouseClient.shops().byId(shop.regionId) == null) return null;
+        List<dev.warehouse.craft.CraftPlanner.Request> build = new ArrayList<>();
+        for (ShopNeed n : shopNeeds(mc, shop)) {
+            if (n.toBuild() <= 0) continue;
+            ItemStack icon = dev.warehouse.items.CategoryResolver.sampleStack(n.unit().key);
+            if (icon != null) build.add(new dev.warehouse.craft.CraftPlanner.Request(icon, n.toBuild(), n.unit().perBox, false));
+        }
+        return build;
+    }
+
+    /** Start a restock run: bring every LOW/OUT item of the shop up to its threshold, from warehouse stock or newly built. */
+    public void startRestock(Minecraft mc, dev.warehouse.shops.Shop shop) {
+        if (active) exit("Previous route cancelled.");
+        dev.warehouse.shops.ShopManager shops = WarehouseClient.shops();
+        restockNeeded.clear();
+        restockNames.clear();
+        restockStartStock.clear();
+        int toBuild = 0;
+        for (ShopNeed n : shopNeeds(mc, shop)) {
+            // The whole shortfall is tracked: what the warehouse has is routed now, the rest routes to the shop once you carry it.
+            restockNeeded.put(n.unit(), n.need());
+            restockNames.put(n.unit(), n.name());
+            if (n.toBuild() > 0) toBuild++;
         }
         if (restockNeeded.isEmpty()) {
-            Chat.info("Nothing to carry over from the warehouse for " + shops.name(shop) + (build.isEmpty() ? "." : "; the shopping list shows what to build first.")
-                    + (noStock > 0 ? " " + noStock + " unit(s) are low but cannot be made." : ""));
+            Chat.info("Nothing to restock at " + shops.name(shop) + ".");
             return;
+        }
+        List<dev.warehouse.craft.CraftPlanner.Request> build = shopBuildRequests(mc, shop);
+        if (build != null && !build.isEmpty()) {
+            // What the warehouse does not hold ready-made goes to the planner: packed shulkers get boxes plus contents.
+            WarehouseClient.craftPlanner().start(mc, "Build for " + shops.name(shop), build.get(0).stack(), build, () -> shopBuildRequests(mc, shop));
+        } else if (toBuild > 0) {
+            Chat.warn(toBuild + " unit type(s) are low, not in the warehouse and cannot be made.");
         }
         active = true;
         kind = Kind.RESTOCK;

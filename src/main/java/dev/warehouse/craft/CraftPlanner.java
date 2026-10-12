@@ -71,6 +71,8 @@ public final class CraftPlanner {
     private final List<RecipeSource> sources = new ArrayList<>();
     private final ClientRecipeBookSource recipeBook = new ClientRecipeBookSource();
     private @Nullable Plan active;
+    /** Live plans re-read their requests from here every refresh: null = keep the current requests, empty = the plan is done. */
+    private java.util.function.@Nullable Supplier<List<Request>> source;
     private boolean hudVisible = true;
     private boolean dirty;
     private int ticks;
@@ -107,6 +109,7 @@ public final class CraftPlanner {
 
     public void clear() {
         active = null;
+        source = null;
     }
 
     /** Plan "make N of this" and pin it. Returns false (with a chat message) when no recipe is known. */
@@ -119,6 +122,7 @@ public final class CraftPlanner {
         }
         Plan p = compute(mc, "Craft " + count + " × " + target.getHoverName().getString(), target, List.of(new Request(target.copy(), count, null, true)));
         active = p;
+        source = null;
         Chat.info(p.title() + ": " + p.lines().size() + " ingredient(s), " + p.steps().size() + " craft step(s)"
                 + (p.missingLines() > 0 ? ", " + p.missingLines() + " missing" : p.gathered() ? ", everything is in your inventory" : ", gather from the warehouse with /warehouse craft route") + ".");
         return true;
@@ -126,8 +130,18 @@ public final class CraftPlanner {
 
     /** Plan whatever a list of requests needs (stock is used first unless a request says craftAll). */
     public void start(Minecraft mc, String title, ItemStack icon, List<Request> requests) {
+        start(mc, title, icon, requests, null);
+    }
+
+    /**
+     * Like {@link #start(Minecraft, String, ItemStack, List)}, but the plan is live: every refresh asks {@code source} for the
+     * current requests, so what has already been delivered drops off the list. The source answers null to keep the current
+     * requests (its subject is unavailable) and an empty list when nothing is left, which ends the plan.
+     */
+    public void start(Minecraft mc, String title, ItemStack icon, List<Request> requests, java.util.function.@Nullable Supplier<List<Request>> source) {
         if (requests.isEmpty()) return;
         active = compute(mc, title, icon, requests);
+        this.source = source;
         Chat.info(active.title() + ": " + active.lines().size() + " item(s) to obtain, " + active.steps().size() + " craft step(s)"
                 + (active.missingLines() > 0 ? ", " + active.missingLines() + " missing" : active.gathered() ? ", everything is in your inventory" : "") + ".");
     }
@@ -137,39 +151,68 @@ public final class CraftPlanner {
      * slots it occupies (empty slots go to the item with the most slots), and shulker boxes are rebuilt with their contents.
      */
     public void startRefill(Minecraft mc, ContainerEntry chest) {
-        Map<String, int[]> slots = new LinkedHashMap<>();   // signature -> {slots, count}
-        Map<String, StackRecord> sample = new LinkedHashMap<>();
-        int empty = chest.slotCount > 0 ? chest.slotCount : 27;
-        for (StackRecord r : chest.contents) {
-            String sig = r.key.asString() + (r.nested != null && !r.nested.isEmpty() ? "#" + nestedSignature(r.nested) : "");
-            int[] a = slots.computeIfAbsent(sig, k -> new int[2]);
-            a[0]++;
-            a[1] += r.count;
-            sample.putIfAbsent(sig, r);
-            empty--;
-        }
-        if (slots.isEmpty()) {
+        List<Layout> layout = layoutOf(chest);
+        if (layout.isEmpty()) {
             Chat.error("That chest is empty, so there is nothing to refill it with. Put one of each item in first.");
             return;
         }
-        String biggest = null;
-        for (Map.Entry<String, int[]> en : slots.entrySet()) if (biggest == null || en.getValue()[0] > slots.get(biggest)[0]) biggest = en.getKey();
-        List<Request> requests = new ArrayList<>();
-        for (Map.Entry<String, int[]> en : slots.entrySet()) {
-            StackRecord r = sample.get(en.getKey());
-            Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(r.key.itemId)).orElse(null);
-            if (item == null) continue;
-            int max = r.nested != null && !r.nested.isEmpty() ? 1 : new ItemStack(item).getMaxStackSize();
-            int slotCount = en.getValue()[0] + (en.getKey().equals(biggest) ? Math.max(0, empty) : 0);
-            int need = slotCount * max - en.getValue()[1];
-            if (need <= 0) continue;
-            requests.add(new Request(new ItemStack(item), need, r.nested != null && !r.nested.isEmpty() ? perBox(r) : null, false));
-        }
+        List<Request> requests = refillRequests(layout, chest);
         if (requests.isEmpty()) {
             Chat.info(chest.label() + " is already full.");
             return;
         }
-        start(mc, "Refill " + chest.label(), new ItemStack(BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(chest.kind == ContainerKind.BARREL ? "minecraft:barrel" : "minecraft:chest")).orElse(net.minecraft.world.item.Items.CHEST)), requests);
+        UUID id = chest.id;
+        ItemStack icon = new ItemStack(BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(chest.kind == ContainerKind.BARREL ? "minecraft:barrel" : "minecraft:chest")).orElse(net.minecraft.world.item.Items.CHEST));
+        // Live: the layout is fixed when the plan starts, the counts follow the chest as it is re-indexed (every time it is open).
+        start(mc, "Refill " + chest.label(), icon, requests, () -> {
+            ContainerEntry now = WarehouseClient.index().byId(id);
+            return now == null ? null : refillRequests(layout, now);
+        });
+    }
+
+    /** One kind of stack a chest is laid out with: which slots it owns and how full each can be. */
+    private record Layout(String sig, Item item, @Nullable List<StackRecord> perBox, int slots, int max) {}
+
+    private static String signatureOf(StackRecord r) {
+        return r.key.asString() + (r.nested != null && !r.nested.isEmpty() ? "#" + nestedSignature(r.nested) : "");
+    }
+
+    /** The chest's layout as stocked now: every item keeps the slots it occupies, empty slots go to the item with the most. */
+    private static List<Layout> layoutOf(ContainerEntry chest) {
+        Map<String, int[]> slots = new LinkedHashMap<>();   // signature -> {slots}
+        Map<String, StackRecord> sample = new LinkedHashMap<>();
+        int empty = chest.slotCount > 0 ? chest.slotCount : 27;
+        for (StackRecord r : chest.contents) {
+            String sig = signatureOf(r);
+            slots.computeIfAbsent(sig, k -> new int[1])[0]++;
+            sample.putIfAbsent(sig, r);
+            empty--;
+        }
+        String biggest = null;
+        for (Map.Entry<String, int[]> en : slots.entrySet()) if (biggest == null || en.getValue()[0] > slots.get(biggest)[0]) biggest = en.getKey();
+        List<Layout> out = new ArrayList<>();
+        for (Map.Entry<String, int[]> en : slots.entrySet()) {
+            StackRecord r = sample.get(en.getKey());
+            Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(r.key.itemId)).orElse(null);
+            if (item == null) continue;
+            boolean packed = r.nested != null && !r.nested.isEmpty();
+            int max = packed ? 1 : new ItemStack(item).getMaxStackSize();
+            int slotCount = en.getValue()[0] + (en.getKey().equals(biggest) ? Math.max(0, empty) : 0);
+            out.add(new Layout(en.getKey(), item, packed ? perBox(r) : null, slotCount, max));
+        }
+        return out;
+    }
+
+    /** What the chest still lacks to fill its layout, given what it holds now. */
+    private static List<Request> refillRequests(List<Layout> layout, ContainerEntry chest) {
+        Map<String, Integer> have = new HashMap<>();
+        for (StackRecord r : chest.contents) have.merge(signatureOf(r), r.count, Integer::sum);
+        List<Request> requests = new ArrayList<>();
+        for (Layout l : layout) {
+            int need = l.slots() * l.max() - have.getOrDefault(l.sig(), 0);
+            if (need > 0) requests.add(new Request(new ItemStack(l.item()), need, l.perBox(), false));
+        }
+        return requests;
     }
 
     private static String nestedSignature(List<StackRecord> nested) {
@@ -190,7 +233,20 @@ public final class CraftPlanner {
         if (active == null || mc.player == null) return;
         if (++ticks % 20 != 0 && !dirty) return;
         dirty = false;
-        active = compute(mc, active.title(), active.target(), active.requests());
+        List<Request> requests = active.requests();
+        if (source != null) {
+            List<Request> now = source.get();
+            if (now != null) {
+                if (now.isEmpty()) {
+                    Chat.info(active.title() + ": done, nothing left to add.");
+                    active = null;
+                    source = null;
+                    return;
+                }
+                requests = now;
+            }
+        }
+        active = compute(mc, active.title(), active.target(), requests);
     }
 
     // ------------------------------------------------------------ planning

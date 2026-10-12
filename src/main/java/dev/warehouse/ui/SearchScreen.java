@@ -1080,6 +1080,8 @@ public final class SearchScreen extends Screen {
         toggle("Announce recorded prices", "a chat line each time a price is noted", () -> cfg.announcePriceCapture, v -> cfg.announcePriceCapture = v);
         toggle("Condense suggestions", "chat hint when a zone runs low on slots", () -> cfg.condenseSuggestions, v -> cfg.condenseSuggestions = v);
         toggle("Custom items stay put", "a rule change never flags stored plugin items as misplaced", () -> cfg.customItemsStayPut, v -> cfg.customItemsStayPut = v);
+        toggle("Inventory full alert", "chat message listing stacks unused for " + cfg.unusedAfterMinutes + "+ minutes", () -> cfg.inventoryFullAlert, v -> cfg.inventoryFullAlert = v);
+        toggle("Mark unused items when full", "tint them in inventory screens until " + cfg.unusedHighlightClearAtFreeSlots + " slots are free", () -> cfg.highlightUnusedWhenFull, v -> cfg.highlightUnusedWhenFull = v);
 
         header("Actions", "", 0xFFFFD040);
         action("Find held item", "highlight where it is stored, or belongs", new RowButton("Find", sh -> {
