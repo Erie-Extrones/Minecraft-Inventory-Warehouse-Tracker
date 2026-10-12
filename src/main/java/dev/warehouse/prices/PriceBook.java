@@ -54,6 +54,15 @@ public final class PriceBook {
         return out;
     }
 
+    public boolean remove(PriceObservation o) {
+        boolean r = store.get().remove(o);
+        if (r) {
+            store.markDirty();
+            fire();
+        }
+        return r;
+    }
+
     public int clear(String priceKey) {
         int before = store.get().size();
         store.get().removeIf(o -> priceKey.equals(o.priceKey));

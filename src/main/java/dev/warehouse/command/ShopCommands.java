@@ -124,6 +124,11 @@ public final class ShopCommands {
     private static int keep(Minecraft mc, boolean add) {
         ItemStack st = held(mc);
         if (st == null) return 0;
+        return setKeep(st, add) ? 1 : 0;
+    }
+
+    /** Shared with the GUI: returns true when the list changed (or the item was already in the wanted state). */
+    public static boolean setKeep(ItemStack st, boolean add) {
         ItemKey key = Fingerprinter.key(st);
         WarehouseClient.categories().learn(st, key);
         var group = WarehouseClient.categories().groupFor(key);
@@ -133,7 +138,7 @@ public final class ShopCommands {
         if (add) {
             if (cfg.alwaysKeep.contains(entry)) {
                 Chat.info(name + " is already always kept (" + entry + ").");
-                return 1;
+                return true;
             }
             cfg.alwaysKeep.add(entry);
             dev.warehouse.config.ConfigIO.save();
@@ -142,12 +147,12 @@ public final class ShopCommands {
             boolean removed = cfg.alwaysKeep.remove(entry) | cfg.alwaysKeep.remove(key.itemId) | cfg.alwaysKeep.remove(key.asString());
             if (!removed) {
                 Chat.error(name + " was not on the always-keep list. /warehouse keep list shows it.");
-                return 0;
+                return false;
             }
             dev.warehouse.config.ConfigIO.save();
             Chat.info(name + " removed from the always-keep list.");
         }
-        return 1;
+        return true;
     }
 
     // ------------------------------------------------------------ prices

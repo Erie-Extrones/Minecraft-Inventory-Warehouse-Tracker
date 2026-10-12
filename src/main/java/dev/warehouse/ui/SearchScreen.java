@@ -36,7 +36,7 @@ import java.util.UUID;
 
 /** Tabbed warehouse UI: Search, Unsorted, Lost, Misplaced, Plan, Condense. */
 public final class SearchScreen extends Screen {
-    public enum Tab { OVERVIEW, SEARCH, UNSORTED, LOST, MISPLACED, PLAN, CONDENSE, SHOPS }
+    public enum Tab { OVERVIEW, SEARCH, CRAFT, PRICES, UNSORTED, LOST, MISPLACED, PLAN, CONDENSE, SHOPS, TOOLS }
 
     private static String lastQuery = "";
     private static Tab lastTab = Tab.OVERVIEW;
@@ -47,7 +47,18 @@ public final class SearchScreen extends Screen {
 
     private interface RowAction { void run(boolean shift); }
 
-    private record Row(@Nullable ItemStack icon, String name, String detail, String right, int rightColor, @Nullable RowAction onClick, List<Component> tooltip, boolean header) {}
+    /** A small button drawn at the right end of a row. */
+    private record RowButton(String label, RowAction action) {}
+
+    private record Row(@Nullable ItemStack icon, String name, String detail, String right, int rightColor, @Nullable RowAction onClick, List<Component> tooltip, boolean header, List<RowButton> buttons) {
+        Row(@Nullable ItemStack icon, String name, String detail, String right, int rightColor, @Nullable RowAction onClick, List<Component> tooltip, boolean header) {
+            this(icon, name, detail, right, rightColor, onClick, tooltip, header, List.of());
+        }
+
+        Row withButtons(RowButton... b) {
+            return new Row(icon, name, detail, right, rightColor, onClick, tooltip, header, List.of(b));
+        }
+    }
 
     private static final int ROW_H = 20;
     private Tab tab = lastTab;
@@ -65,6 +76,10 @@ public final class SearchScreen extends Screen {
     private final List<Button> planButtons = new ArrayList<>();
     private Button minMinus, minPlus, essentialsToggle, clearLostButton, clearHighlights, sortRoute;
     private Button shopInventory, shopRestock, shopBack, stockCheckButton;
+    private EditBox craftItemBox, craftCountBox, priceSearchBox, priceAmountBox, priceQtyBox, priceShopBox, toolsBox, shopAmountBox;
+    private Button craftPlan, craftGather, craftClear, craftHud, priceBuy, priceSell, priceClear;
+    private int controlsY = 44;
+    private static @Nullable ItemStack craftSelected, priceSubject;
 
     public SearchScreen() {
         super(Component.literal("Warehouse"));
@@ -74,13 +89,16 @@ public final class SearchScreen extends Screen {
     protected void init() {
         tabButtons.clear();
         planButtons.clear();
-        int x = 20;
+        int perRow = Math.max(1, (width - 40) / 62);
+        int tabRows = (int) Math.ceil(Tab.values().length / (double) perRow);
+        controlsY = 22 + tabRows * 20 + 2;
+        int i = 0;
         for (Tab t : Tab.values()) {
-            Button b = Button.builder(Component.literal(label(t)), btn -> switchTab(t)).bounds(x, 22, 60, 18).build();
+            Button b = Button.builder(Component.literal(label(t)), btn -> switchTab(t)).bounds(20 + (i % perRow) * 62, 22 + (i / perRow) * 20, 60, 18).build();
             tabButtons.add(addRenderableWidget(b));
-            x += 62;
+            i++;
         }
-        query = new EditBox(getFont(), 20, 44, Math.min(260, width - 140), 18, Component.literal("Search"));
+        query = new EditBox(getFont(), 20, controlsY, Math.min(260, width - 140), 18, Component.literal("Search"));
         query.setMaxLength(100);
         query.setHint(Component.literal("name, id, group or category").withStyle(ChatFormatting.DARK_GRAY));
         query.setValue(lastQuery);
@@ -92,86 +110,149 @@ public final class SearchScreen extends Screen {
         addRenderableWidget(query);
 
         clearHighlights = addRenderableWidget(Button.builder(Component.literal("Clear highlights"), b -> WarehouseClient.highlights().clear())
-                .bounds(width - 120, 44, 100, 18).build());
+                .bounds(width - 120, controlsY, 100, 18).build());
 
         int px = 20;
         planButtons.add(addRenderableWidget(Button.builder(Component.literal("Run"), b -> {
             WarehouseClient.organizer().run(minecraft, false);
             rebuild();
-        }).bounds(px, 44, 50, 18).build()));
+        }).bounds(px, controlsY, 50, 18).build()));
         px += 52;
         planButtons.add(addRenderableWidget(Button.builder(Component.literal("Replan"), b -> {
             WarehouseClient.organizer().run(minecraft, true);
             rebuild();
-        }).bounds(px, 44, 54, 18).build()));
+        }).bounds(px, controlsY, 54, 18).build()));
         px += 56;
         planButtons.add(addRenderableWidget(Button.builder(Component.literal("Accept"), b -> {
             if (WarehouseClient.organizer().accept()) Chat.info("Plan accepted.");
             rebuild();
-        }).bounds(px, 44, 54, 18).build()));
+        }).bounds(px, controlsY, 54, 18).build()));
         px += 56;
         planButtons.add(addRenderableWidget(Button.builder(Component.literal("Reject"), b -> {
             WarehouseClient.organizer().reject();
             rebuild();
-        }).bounds(px, 44, 54, 18).build()));
+        }).bounds(px, controlsY, 54, 18).build()));
         px += 56;
         planButtons.add(addRenderableWidget(Button.builder(Component.literal("Preview"), b -> {
             WarehouseClient.organizer().setPreview(!WarehouseClient.organizer().previewEnabled());
             rebuild();
-        }).bounds(px, 44, 58, 18).build()));
+        }).bounds(px, controlsY, 58, 18).build()));
         px += 60;
         planButtons.add(addRenderableWidget(Button.builder(Component.literal("Export"), b -> {
             String name = WarehouseClient.exporter().export(null, false);
             if (name != null) Chat.info("Exported to " + name);
-        }).bounds(px, 44, 54, 18).build()));
+        }).bounds(px, controlsY, 54, 18).build()));
 
         minMinus = addRenderableWidget(Button.builder(Component.literal("-"), b -> {
             misplacedMin = Math.max(1, misplacedMin - 1);
             rebuild();
-        }).bounds(20, 44, 18, 18).build());
+        }).bounds(20, controlsY, 18, 18).build());
         minPlus = addRenderableWidget(Button.builder(Component.literal("+"), b -> {
             misplacedMin = Math.min(64, misplacedMin + (misplacedMin >= 16 ? 16 : 1));
             rebuild();
-        }).bounds(100, 44, 18, 18).build());
+        }).bounds(100, controlsY, 18, 18).build());
         sortRoute = addRenderableWidget(Button.builder(Component.literal("Sort route"), b -> {
             WarehouseClient.clearMode().toggle(minecraft, dev.warehouse.modes.ClearInventoryMode.Kind.SORT);
             onClose();
-        }).bounds(126, 44, 80, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Guide me chest to chest to take misplaced items and put them where they belong"))).build());
+        }).bounds(126, controlsY, 80, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Guide me chest to chest to take misplaced items and put them where they belong"))).build());
         essentialsToggle = addRenderableWidget(Button.builder(Component.literal("Show essentials"), b -> {
             WarehouseClient.clearMode().setShowEssentials(!WarehouseClient.clearMode().showEssentials());
             rebuild();
-        }).bounds(20, 44, 110, 18).build());
+        }).bounds(20, controlsY, 110, 18).build());
         clearLostButton = addRenderableWidget(Button.builder(Component.literal("Clear lost log"), b -> {
             WarehouseClient.lostLog().clear();
             rebuild();
-        }).bounds(20, 44, 100, 18).build());
+        }).bounds(20, controlsY, 100, 18).build());
         shopBack = addRenderableWidget(Button.builder(Component.literal("All shops"), b -> {
             selectedShop = null;
             scroll = 0;
             rebuild();
-        }).bounds(20, 44, 70, 18).build());
+        }).bounds(20, controlsY, 70, 18).build());
         shopInventory = addRenderableWidget(Button.builder(Component.literal("Do inventory"), b -> {
             var shop = WarehouseClient.shops().byId(selectedShop);
             if (shop != null) {
                 WarehouseClient.stockCheck().start(minecraft, dev.warehouse.shops.StockCheck.Kind.SHOP, shop);
                 onClose();
             }
-        }).bounds(92, 44, 86, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Light up every container in the shop; each one unhighlights when you open it. The report opens when all are counted."))).build());
+        }).bounds(92, controlsY, 86, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Light up every container in the shop; each one unhighlights when you open it. The report opens when all are counted."))).build());
         shopRestock = addRenderableWidget(Button.builder(Component.literal("Restock route"), b -> {
             var shop = WarehouseClient.shops().byId(selectedShop);
             if (shop != null) {
                 WarehouseClient.clearMode().startRestock(minecraft, shop);
                 onClose();
             }
-        }).bounds(180, 44, 90, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Pick up low items from the warehouse and deliver them to the shop"))).build());
+        }).bounds(180, controlsY, 90, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Pick up low items from the warehouse and deliver them to the shop"))).build());
         stockCheckButton = addRenderableWidget(Button.builder(Component.literal("Stock check"), b -> {
             WarehouseClient.stockCheck().start(minecraft, dev.warehouse.shops.StockCheck.Kind.WAREHOUSE, null);
             onClose();
-        }).bounds(20, 44, 90, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Light up every warehouse container and walk them; each unhighlights when opened"))).build());
+        }).bounds(20, controlsY, 90, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Light up every warehouse container and walk them; each unhighlights when opened"))).build());
 
         listLeft = 20;
         listRight = width - 20;
-        listTop = 68;
+        // ---- Craft tab
+        craftItemBox = addRenderableWidget(new EditBox(getFont(), 20, controlsY, 150, 18, Component.literal("Item")));
+        craftItemBox.setHint(Component.literal("item name to craft").withStyle(ChatFormatting.DARK_GRAY));
+        craftItemBox.setResponder(v -> {
+            scroll = 0;
+            rebuild();
+        });
+        craftCountBox = addRenderableWidget(new EditBox(getFont(), 174, controlsY, 44, 18, Component.literal("Count")));
+        craftCountBox.setHint(Component.literal("count").withStyle(ChatFormatting.DARK_GRAY));
+        craftCountBox.setValue("64");
+        craftPlan = addRenderableWidget(Button.builder(Component.literal("Plan"), b -> planCraft(null)).bounds(222, controlsY, 44, 18)
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Plan the selected item, or the one in your hand, in the given count"))).build());
+        craftGather = addRenderableWidget(Button.builder(Component.literal("Gather"), b -> gatherCraft()).bounds(268, controlsY, 54, 18)
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Route through the warehouse chests holding what you still lack"))).build());
+        craftClear = addRenderableWidget(Button.builder(Component.literal("Clear"), b -> {
+            WarehouseClient.craftPlanner().clear();
+            craftSelected = null;
+            rebuild();
+        }).bounds(324, controlsY, 46, 18).build());
+        craftHud = addRenderableWidget(Button.builder(Component.literal("HUD"), b -> {
+            WarehouseClient.craftPlanner().setHudVisible(!WarehouseClient.craftPlanner().hudVisible());
+            rebuild();
+        }).bounds(372, controlsY, 40, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Show or hide the pinned shopping list"))).build());
+
+        // ---- Prices tab
+        priceSearchBox = addRenderableWidget(new EditBox(getFont(), 20, controlsY, 110, 18, Component.literal("Item")));
+        priceSearchBox.setHint(Component.literal("pick an item").withStyle(ChatFormatting.DARK_GRAY));
+        priceSearchBox.setResponder(v -> {
+            scroll = 0;
+            rebuild();
+        });
+        priceAmountBox = addRenderableWidget(new EditBox(getFont(), 134, controlsY, 56, 18, Component.literal("Amount")));
+        priceAmountBox.setHint(Component.literal("amount").withStyle(ChatFormatting.DARK_GRAY));
+        priceQtyBox = addRenderableWidget(new EditBox(getFont(), 194, controlsY, 34, 18, Component.literal("Qty")));
+        priceQtyBox.setHint(Component.literal("qty").withStyle(ChatFormatting.DARK_GRAY));
+        priceQtyBox.setValue("1");
+        priceShopBox = addRenderableWidget(new EditBox(getFont(), 232, controlsY, 84, 18, Component.literal("Shop")));
+        priceShopBox.setHint(Component.literal("shop (optional)").withStyle(ChatFormatting.DARK_GRAY));
+        priceBuy = addRenderableWidget(Button.builder(Component.literal("Buy price"), b -> recordPrice(false)).bounds(320, controlsY, 62, 18)
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("What a shop charges you for the amount (per unit, or for the quantity given)"))).build());
+        priceSell = addRenderableWidget(Button.builder(Component.literal("Sell price"), b -> recordPrice(true)).bounds(384, controlsY, 62, 18)
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("What a shop pays you"))).build());
+        priceClear = addRenderableWidget(Button.builder(Component.literal("Clear"), b -> {
+            if (priceSubject != null) {
+                int n = 0;
+                for (String pk : dev.warehouse.prices.PriceKeys.candidates(Fingerprinter.key(priceSubject))) n += WarehouseClient.prices().clear(pk);
+                Chat.info("Removed " + n + " price(s).");
+                rebuild();
+            }
+        }).bounds(448, controlsY, 46, 18).build());
+
+        // ---- Tools tab
+        toolsBox = addRenderableWidget(new EditBox(getFont(), 20, controlsY, 170, 18, Component.literal("Name")));
+        toolsBox.setHint(Component.literal("filter, or a new name for Rename").withStyle(ChatFormatting.DARK_GRAY));
+        toolsBox.setResponder(v -> {
+            scroll = 0;
+            rebuild();
+        });
+
+        // ---- Shops tab
+        shopAmountBox = addRenderableWidget(new EditBox(getFont(), 272, controlsY, 56, 18, Component.literal("Amount")));
+        shopAmountBox.setHint(Component.literal("amount").withStyle(ChatFormatting.DARK_GRAY));
+
+        listTop = controlsY + 24;
         listBottom = height - 24;
         switchTab(tab);
     }
@@ -186,6 +267,9 @@ public final class SearchScreen extends Screen {
             case CONDENSE -> "Condense";
             case OVERVIEW -> "Overview";
             case SHOPS -> "Shops";
+            case CRAFT -> "Craft";
+            case PRICES -> "Prices";
+            case TOOLS -> "Tools";
         };
     }
 
@@ -200,8 +284,12 @@ public final class SearchScreen extends Screen {
         minMinus.visible = minPlus.visible = sortRoute.visible = t == Tab.MISPLACED;
         essentialsToggle.visible = t == Tab.UNSORTED;
         clearLostButton.visible = t == Tab.LOST;
-        shopBack.visible = shopInventory.visible = shopRestock.visible = t == Tab.SHOPS && selectedShop != null;
+        shopBack.visible = shopInventory.visible = shopRestock.visible = shopAmountBox.visible = t == Tab.SHOPS && selectedShop != null;
         stockCheckButton.visible = t == Tab.OVERVIEW;
+        craftItemBox.visible = craftCountBox.visible = craftPlan.visible = craftGather.visible = craftClear.visible = craftHud.visible = t == Tab.CRAFT;
+        priceSearchBox.visible = priceAmountBox.visible = priceQtyBox.visible = priceShopBox.visible = priceBuy.visible = priceSell.visible = priceClear.visible = t == Tab.PRICES;
+        toolsBox.visible = t == Tab.TOOLS;
+        if (t == Tab.PRICES && priceSubject == null && minecraft != null && minecraft.player != null && !minecraft.player.getMainHandItem().isEmpty()) priceSubject = minecraft.player.getMainHandItem().copy();
         if (t == Tab.SEARCH && autoFocusQuery && !listFocused) setFocused(query);
         rebuild();
         if (listFocused) selected = nextSelectable(-1, 1);
@@ -318,6 +406,9 @@ public final class SearchScreen extends Screen {
             case CONDENSE -> buildCondense();
             case OVERVIEW -> buildOverview();
             case SHOPS -> buildShops();
+            case CRAFT -> buildCraft();
+            case PRICES -> buildPrices();
+            case TOOLS -> buildTools();
         }
         int maxScroll = Math.max(0, rows.size() * ROW_H - (listBottom - listTop));
         scroll = Math.min(scroll, maxScroll);
@@ -393,7 +484,8 @@ public final class SearchScreen extends Screen {
             Organizer.Resolution res = WarehouseClient.organizer().resolve(a.key());
             if (res != null) tip.add(Component.literal("Belongs in: " + res.category() + " @ " + res.container().posString()).withStyle(ChatFormatting.GREEN));
             tip.add(Component.literal("Click: highlight best location. Shift-click: highlight all.").withStyle(ChatFormatting.DARK_GRAY));
-            rows.add(new Row(icon(a.key()), a.name(), loc, "×" + a.total() + "  " + Staleness.describe(a.newest()), Staleness.color(a.newest()), shift -> {
+            ItemStack rowIcon = icon(a.key());
+            Row row = new Row(rowIcon, a.name(), loc, "×" + a.total() + "  " + Staleness.describe(a.newest()), Staleness.color(a.newest()), shift -> {
                 if (target == null) return;
                 if (shift) {
                     for (ContainerEntry e : a.where().keySet()) WarehouseClient.highlights().container(e, a.name() + " ×" + a.where().get(e));
@@ -402,7 +494,22 @@ public final class SearchScreen extends Screen {
                 }
                 Chat.info("Highlighted " + a.name() + " for " + ConfigIO.get().highlightSeconds + " s.");
                 onClose();
-            }, tip, false));
+            }, tip, false);
+            if (rowIcon != null) {
+                row = a.key().isVanilla()
+                        ? row.withButtons(new RowButton("Craft", sh -> {
+                            craftSelected = rowIcon.copy();
+                            switchTab(Tab.CRAFT);
+                        }), new RowButton("Price", sh -> {
+                            priceSubject = rowIcon.copy();
+                            switchTab(Tab.PRICES);
+                        }))
+                        : row.withButtons(new RowButton("Price", sh -> {
+                            priceSubject = rowIcon.copy();
+                            switchTab(Tab.PRICES);
+                        }));
+            }
+            rows.add(row);
         }
         footer = hits.size() + " item type(s) across " + WarehouseClient.index().all().size() + " containers";
     }
@@ -428,10 +535,14 @@ public final class SearchScreen extends Screen {
             String detail = essential ? "essential (kept)" : holders.isEmpty() && res == null ? (planActive ? "no home: " + WarehouseClient.categories().categoryOf(key) + " zone has no room" : "no known home") : "has a home";
             final ContainerEntry target = res != null ? res.container() : (holders.isEmpty() ? null : holders.get(0));
             List<Component> tip = List.of(Component.literal(key.asString()).withStyle(ChatFormatting.DARK_GRAY), Component.literal("Category: " + WarehouseClient.categories().categoryOf(key)).withStyle(ChatFormatting.GRAY));
+            final boolean kept = essential;
             rows.add(new Row(st, Fingerprinter.displayName(st), detail, "×" + st.getCount(), essential ? 0xFF909090 : 0xFFE0A050, target == null ? null : shift -> {
                 WarehouseClient.highlights().container(target, Fingerprinter.displayName(st));
                 onClose();
-            }, tip, false));
+            }, tip, false).withButtons(new RowButton(kept ? "Unkeep" : "Keep", sh -> {
+                dev.warehouse.command.ShopCommands.setKeep(st, !kept);
+                rebuild();
+            })));
             shown++;
         }
         footer = shown + " stack(s) listed" + (mode.showEssentials() ? " (including essentials and sorted items)" : "") + (planActive ? "" : "  — no accepted plan");
@@ -664,9 +775,538 @@ public final class SearchScreen extends Screen {
                 }
                 Chat.info(n == 0 ? "No shop chest holds " + name + " right now." : "Highlighted " + n + " shop chest(s) holding " + name + ".");
                 onClose();
-            }, tip, false));
+            }, tip, false).withButtons(
+                    new RowButton("Price", sh -> {
+                        double amount = parseDouble(shopAmountBox, -1);
+                        if (amount < 0) {
+                            Chat.error("Type the price in the amount box first.");
+                            return;
+                        }
+                        shops.setSellPrice(shop, dev.warehouse.prices.PriceKeys.of(key), amount);
+                        rebuild();
+                    }),
+                    new RowButton("Min", sh -> {
+                        int min = parseInt(shopAmountBox, -1);
+                        if (min < 0) {
+                            Chat.error("Type the threshold in the amount box first.");
+                            return;
+                        }
+                        shops.setRestockMin(shop, dev.warehouse.prices.PriceKeys.of(key), min);
+                        rebuild();
+                    }),
+                    new RowButton("Plan", sh -> {
+                        ItemStack ic = icon(key);
+                        int want = Math.max(i.threshold() * 2, i.maxSeen()) - i.count();
+                        if (ic == null || want <= 0) {
+                            Chat.info(name + " does not need restocking.");
+                            return;
+                        }
+                        WarehouseClient.craftPlanner().start(minecraft, "Restock " + want + " × " + name + " for " + shops.name(shop), ic,
+                                List.of(new dev.warehouse.craft.CraftPlanner.Request(ic, want, null, false)));
+                        switchTab(Tab.CRAFT);
+                    })));
         }
-        footer = "Do inventory: walk every container; Restock route: fetch low items from the warehouse   |   /warehouse shop price <amount> sets a sell price for the held item";
+        footer = "Price / Min use the amount box; Plan lists what it takes to restock that item   |   Do inventory walks every container; Restock route fetches low items";
+    }
+
+    /** Screen x-ranges of a row's buttons, laid out right to left before the right-hand text. */
+    private List<int[]> buttonRects(Row r) {
+        if (r.buttons.isEmpty()) return List.of();
+        List<int[]> out = new ArrayList<>();
+        int bx = listRight - 6 - (r.right.isEmpty() ? 0 : getFont().width(r.right) + 8);
+        for (int i = r.buttons.size() - 1; i >= 0; i--) {
+            int bw = getFont().width(r.buttons.get(i).label()) + 8;
+            bx -= bw;
+            out.add(0, new int[]{bx, bx + bw});
+            bx -= 4;
+        }
+        return out;
+    }
+
+    private static int parseInt(EditBox box, int fallback) {
+        try {
+            return Integer.parseInt(box.getValue().trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static double parseDouble(EditBox box, double fallback) {
+        try {
+            return Double.parseDouble(box.getValue().trim().replace(",", ""));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    // ------------------------------------------------------------ craft tab
+
+    private void planCraft(@Nullable ItemStack explicit) {
+        ItemStack target = explicit != null ? explicit : craftSelected != null ? craftSelected : minecraft != null && minecraft.player != null ? minecraft.player.getMainHandItem() : ItemStack.EMPTY;
+        if (target.isEmpty()) {
+            Chat.error("Pick an item from the list, or hold it, then press Plan.");
+            return;
+        }
+        int count = Math.max(1, parseInt(craftCountBox, 64));
+        if (WarehouseClient.craftPlanner().start(minecraft, target, count)) {
+            craftSelected = target.copy();
+            craftItemBox.setValue("");
+        }
+        rebuild();
+    }
+
+    private void gatherCraft() {
+        var planner = WarehouseClient.craftPlanner();
+        if (planner.active() == null) {
+            Chat.error("Plan something first.");
+            return;
+        }
+        var fetch = planner.toFetch();
+        if (fetch.isEmpty()) {
+            Chat.info(planner.active().gathered() ? "You already carry everything." : "Nothing to gather: the warehouse has none of what is missing.");
+            return;
+        }
+        WarehouseClient.clearMode().startFetch(minecraft, fetch, planner.fetchNames(), "Gather: " + planner.active().title());
+        onClose();
+    }
+
+    private void buildCraft() {
+        var planner = WarehouseClient.craftPlanner();
+        var plan = planner.active();
+        String q = craftItemBox.getValue().trim().toLowerCase(Locale.ROOT);
+        craftHud.setMessage(Component.literal(planner.hudVisible() ? "HUD ✓" : "HUD"));
+        if (q.length() >= 2) {
+            int shown = 0;
+            for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+                ItemStack st = new ItemStack(item);
+                if (st.isEmpty()) continue;
+                String name = st.getHoverName().getString();
+                String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).toString();
+                if (!name.toLowerCase(Locale.ROOT).contains(q) && !id.contains(q)) continue;
+                if (shown++ >= 150) {
+                    header("...", "keep typing to narrow the list", 0xFF808080);
+                    break;
+                }
+                ItemKey key = new ItemKey(id, "");
+                int stored = WarehouseClient.index().totalCount(key);
+                int recipes = 0;
+                for (var src : planner.sources()) recipes += src.recipesFor(item).size();
+                rows.add(new Row(st, name, id + (recipes > 0 ? "  ·  " + recipes + " recipe(s)" : "  ·  no recipe known"), stored > 0 ? stored + " stored" : "", 0xFFA0A0A0, shift -> {
+                    craftSelected = st;
+                    planCraft(st);
+                }, List.of(Component.literal("Click to plan " + craftCountBox.getValue().trim() + " of it").withStyle(ChatFormatting.DARK_GRAY)), false));
+            }
+            footer = "Click an item to plan it with the count above";
+            return;
+        }
+        if (plan == null) {
+            header("Plan a craft", "Type an item name above, or hold the item and press Plan. The count box says how many.", 0xFFC0A0FF);
+            if (craftSelected != null) rows.add(new Row(craftSelected, "Selected: " + craftSelected.getHoverName().getString(), "press Plan", "", 0xFFFFFFFF, shift -> planCraft(craftSelected), List.of(), false));
+            rows.add(new Row(null, "From a shop chest", "open the chest and press Plan refill to list everything needed to fill it, shulker contents included", "", 0xFFA0A0A0, null, List.of(), false));
+            footer = "Recipes come from your recipe book" + (planner.sources().size() > 1 ? " and JEI" : "; the JEI add-on adds the rest");
+            return;
+        }
+        String summary = plan.lines().size() + " item(s) to obtain, " + plan.steps().size() + " craft step(s)" + (plan.missingLines() > 0 ? ", " + plan.missingLines() + " missing" : plan.gathered() ? ", everything on you" : "");
+        rows.add(new Row(plan.target(), plan.title(), summary, "", 0xFFC0A0FF, null, List.of(), true)
+                .withButtons(new RowButton("Gather", sh -> gatherCraft()), new RowButton("Clear", sh -> {
+                    planner.clear();
+                    rebuild();
+                })));
+        for (var l : plan.lines()) {
+            String where = l.where().isEmpty() ? "" : "  @ " + l.where().get(0).posString() + (l.where().size() > 1 ? " +" + (l.where().size() - 1) : "");
+            String detail = "on you " + l.inventory() + " / need " + l.need() + (l.warehouse() > 0 ? "  ·  warehouse " + l.warehouse() + where : "");
+            String right = l.missing() > 0 ? "missing " + l.missing() : l.satisfiedByInventory() ? "✓" : "fetch " + (l.need() - l.inventory());
+            int color = l.missing() > 0 ? 0xFFFF7070 : l.satisfiedByInventory() ? 0xFF80FF80 : 0xFFFFD040;
+            List<Component> tip = new ArrayList<>();
+            tip.add(Component.literal(l.name()).withStyle(ChatFormatting.WHITE));
+            int shown = 0;
+            for (ContainerEntry e : l.where()) {
+                if (shown++ >= 6) break;
+                tip.add(Component.literal("  " + e.label() + "  ×" + l.perChest().getOrDefault(e.id, 0)).withStyle(ChatFormatting.GRAY));
+            }
+            tip.add(Component.literal(l.where().isEmpty() ? "Not in the warehouse" : "Click: highlight these chests").withStyle(ChatFormatting.DARK_GRAY));
+            ItemKey vk = new ItemKey(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(l.item()).toString(), "");
+            rows.add(new Row(l.icon(), l.name(), detail, right, color, l.where().isEmpty() ? null : sh -> {
+                int n = 0;
+                for (ContainerEntry e : l.where()) WarehouseClient.highlights().containerForItem(e, vk, ConfigIO.get().highlightColor, ConfigIO.get().highlightSeconds, l.name() + " ×" + l.perChest().getOrDefault(e.id, 0), n++ == 0, "craft");
+                onClose();
+            }, tip, false).withButtons(new RowButton("Price", sh -> {
+                priceSubject = l.icon().copy();
+                switchTab(Tab.PRICES);
+            })));
+        }
+        if (!plan.steps().isEmpty()) header("Craft steps", "", 0xFFA0A0A0);
+        for (var st : plan.steps()) {
+            rows.add(new Row(st.result(), st.crafts() + "× " + st.kind() + " → " + st.makes() + " " + st.name(), st.station().isEmpty() ? "" : "at " + st.station().getHoverName().getString(), "", 0xFFA0A0A0, null, List.of(), false));
+        }
+        footer = "Type an item name above to plan something else   |   the list stays pinned on screen until Clear";
+    }
+
+    // ------------------------------------------------------------ prices tab
+
+    private void recordPrice(boolean sell) {
+        if (priceSubject == null) {
+            Chat.error("Pick an item first.");
+            return;
+        }
+        double amount = parseDouble(priceAmountBox, -1);
+        if (amount < 0) {
+            Chat.error("Type the amount first.");
+            return;
+        }
+        int qty = Math.max(1, parseInt(priceQtyBox, 1));
+        String shop = priceShopBox.getValue().trim();
+        ItemKey key = Fingerprinter.key(priceSubject);
+        WarehouseClient.categories().learn(priceSubject, key);
+        WarehouseClient.prices().add(new dev.warehouse.prices.PriceObservation(dev.warehouse.prices.PriceKeys.of(key), Fingerprinter.displayName(priceSubject), amount / qty, qty, sell, shop.isEmpty() ? null : shop, "manual"));
+        priceAmountBox.setValue("");
+        rebuild();
+    }
+
+    private void buildPrices() {
+        String q = priceSearchBox.getValue().trim().toLowerCase(Locale.ROOT);
+        if (!q.isEmpty()) {
+            java.util.Set<ItemKey> seen = new java.util.HashSet<>();
+            if (minecraft != null && minecraft.player != null) {
+                var inv = minecraft.player.getInventory();
+                for (int i = 0; i < inv.getContainerSize(); i++) {
+                    ItemStack st = inv.getItem(i);
+                    if (st.isEmpty() || !Fingerprinter.displayName(st).toLowerCase(Locale.ROOT).contains(q)) continue;
+                    ItemKey k = Fingerprinter.key(st);
+                    if (!seen.add(k)) continue;
+                    ItemStack copy = st.copy();
+                    rows.add(new Row(copy, Fingerprinter.displayName(st), "in your inventory", "", 0xFFA0A0A0, sh -> {
+                        priceSubject = copy;
+                        priceSearchBox.setValue("");
+                        rebuild();
+                    }, List.of(), false));
+                }
+            }
+            for (Agg a : aggregate()) {
+                if (seen.contains(a.key()) || !a.name().toLowerCase(Locale.ROOT).contains(q)) continue;
+                if (rows.size() > 120) break;
+                ItemStack ic = icon(a.key());
+                if (ic == null) continue;
+                rows.add(new Row(ic, a.name(), "stored ×" + a.total(), "", 0xFFA0A0A0, sh -> {
+                    priceSubject = ic;
+                    priceSearchBox.setValue("");
+                    rebuild();
+                }, List.of(), false));
+            }
+            footer = "Click an item to make it the subject";
+            return;
+        }
+        if (priceSubject == null) {
+            header("Pick an item", "Hold it when opening this tab, type its name above, or use a Price button on another tab.", 0xFFFFD060);
+            return;
+        }
+        ItemKey key = Fingerprinter.key(priceSubject);
+        var val = WarehouseClient.valuation().unitValue(key);
+        rows.add(new Row(priceSubject, Fingerprinter.displayName(priceSubject), val == null ? "no value yet" : "valued at " + dev.warehouse.prices.Valuation.describe(val), "", 0xFFFFD060, null, List.of(), true)
+                .withButtons(new RowButton("Craft", sh -> {
+                    craftSelected = priceSubject.copy();
+                    switchTab(Tab.CRAFT);
+                })));
+        List<String> keys = dev.warehouse.prices.PriceKeys.candidates(key);
+        var sst = WarehouseClient.prices().stats(keys, true);
+        var bst = WarehouseClient.prices().stats(keys, false);
+        rows.add(new Row(null, "Sell: " + (sst == null ? "-" : dev.warehouse.prices.Valuation.money(sst.median()) + " median of " + sst.count() + " (" + dev.warehouse.prices.Valuation.money(sst.min()) + " to " + dev.warehouse.prices.Valuation.money(sst.max()) + ")"),
+                "Buy: " + (bst == null ? "-" : dev.warehouse.prices.Valuation.money(bst.median()) + " median of " + bst.count() + " (" + dev.warehouse.prices.Valuation.money(bst.min()) + " to " + dev.warehouse.prices.Valuation.money(bst.max()) + ")"), "", 0xFFDDDDDD, null, List.of(), false));
+        int n = 0;
+        for (String pk : keys) {
+            for (var o : WarehouseClient.prices().observations(pk)) {
+                n++;
+                final var obs = o;
+                rows.add(new Row(null, dev.warehouse.prices.Valuation.money(o.unitPrice) + "  " + (o.sell ? "sell" : "buy") + (o.shop != null ? "  at " + o.shop : ""),
+                        o.source + (o.quantity > 1 ? ", per unit of " + o.quantity : "") + "  ·  " + Staleness.describe(o.whenEpochMs), "", Staleness.color(o.whenEpochMs), null, List.of(), false)
+                        .withButtons(new RowButton("Delete", sh -> {
+                            WarehouseClient.prices().remove(obs);
+                            rebuild();
+                        })));
+            }
+        }
+        if (n == 0) rows.add(new Row(null, "No prices recorded yet", "Shop chat and signs are recorded automatically; or type an amount above and press Buy price or Sell price.", "", 0xFFA0A0A0, null, List.of(), false));
+        footer = "Buy price = what a shop charges you; Sell price = what a shop pays you. Amount is per unit, or for the quantity given.";
+    }
+
+    // ------------------------------------------------------------ tools tab
+
+    private void toggle(String label, String detail, java.util.function.BooleanSupplier get, java.util.function.Consumer<Boolean> set) {
+        boolean on = get.getAsBoolean();
+        rows.add(new Row(null, label, detail, on ? "ON" : "OFF", on ? 0xFF80FF80 : 0xFF909090, sh -> {
+            set.accept(!on);
+            ConfigIO.save();
+            rebuild();
+        }, List.of(Component.literal("Click to switch " + (on ? "off" : "on")).withStyle(ChatFormatting.DARK_GRAY)), false));
+    }
+
+    private void action(String label, String detail, RowButton... buttons) {
+        rows.add(new Row(null, label, detail, "", 0xFFDDDDDD, null, List.of(), false).withButtons(buttons));
+    }
+
+    private @Nullable ItemStack heldOrNull() {
+        ItemStack st = minecraft != null && minecraft.player != null ? minecraft.player.getMainHandItem() : ItemStack.EMPTY;
+        if (st.isEmpty()) Chat.error("Hold the item first.");
+        return st.isEmpty() ? null : st;
+    }
+
+    private @Nullable ContainerEntry lookedAtContainer() {
+        if (minecraft == null || minecraft.level == null) return null;
+        if (!(minecraft.hitResult instanceof net.minecraft.world.phys.BlockHitResult bhr) || minecraft.hitResult.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            Chat.error("Look at the container before opening this screen.");
+            return null;
+        }
+        var res = dev.warehouse.index.ContainerResolver.resolveAt(minecraft, bhr.getBlockPos());
+        ContainerEntry e = res != null ? WarehouseClient.index().atBlock(res.dimension(), res.primary()) : null;
+        if (e == null) Chat.error("That block is not an indexed container.");
+        return e;
+    }
+
+    private void buildTools() {
+        var cfg = ConfigIO.get();
+        String filter = toolsBox.getValue().trim().toLowerCase(Locale.ROOT);
+        header("Guides and display", "click a line to switch it", 0xFF40C8FF);
+        toggle("Held-item guide", "keep the destination chest highlighted while holding an item in the warehouse", () -> cfg.heldItemGuide, v -> cfg.heldItemGuide = v);
+        toggle("Region outlines", "draw region boxes in the world", () -> cfg.showRegionOutlines, v -> cfg.showRegionOutlines = v);
+        toggle("Particle trail", "lead to the target with particles along a walkable path", () -> cfg.guideParticles, v -> cfg.guideParticles = v);
+        toggle("Guide line", "also draw the straight line", () -> cfg.guideLine, v -> cfg.guideLine = v);
+        toggle("Sneak stock card", "sneak while looking at a block or holding an item", () -> cfg.lookHud, v -> cfg.lookHud = v);
+        toggle("Warehouse button in inventory", "", () -> cfg.inventoryButton, v -> cfg.inventoryButton = v);
+        toggle("Shopping list HUD", "pin the craft plan to the screen", () -> cfg.shoppingListHud, v -> cfg.shoppingListHud = v);
+        toggle("Always open on Overview", "otherwise only the first time per session", () -> cfg.alwaysOpenOverview, v -> cfg.alwaysOpenOverview = v);
+        toggle("Record prices from shop chat", "", () -> cfg.capturePricesFromChat, v -> cfg.capturePricesFromChat = v);
+        toggle("Record prices from signs", "", () -> cfg.capturePricesFromSigns, v -> cfg.capturePricesFromSigns = v);
+        toggle("Announce recorded prices", "a chat line each time a price is noted", () -> cfg.announcePriceCapture, v -> cfg.announcePriceCapture = v);
+        toggle("Condense suggestions", "chat hint when a zone runs low on slots", () -> cfg.condenseSuggestions, v -> cfg.condenseSuggestions = v);
+        toggle("Custom items stay put", "a rule change never flags stored plugin items as misplaced", () -> cfg.customItemsStayPut, v -> cfg.customItemsStayPut = v);
+
+        header("Actions", "", 0xFFFFD040);
+        action("Find held item", "highlight where it is stored, or belongs", new RowButton("Find", sh -> {
+            FindHeldItem.run(minecraft, false);
+            onClose();
+        }), new RowButton("All places", sh -> {
+            FindHeldItem.run(minecraft, true);
+            onClose();
+        }));
+        action("Routes", "clear your inventory into the warehouse, or fix misplaced items", new RowButton("Clear inventory", sh -> {
+            WarehouseClient.clearMode().toggle(minecraft, dev.warehouse.modes.ClearInventoryMode.Kind.CLEAR);
+            onClose();
+        }), new RowButton("Sort", sh -> {
+            WarehouseClient.clearMode().toggle(minecraft, dev.warehouse.modes.ClearInventoryMode.Kind.SORT);
+            onClose();
+        }));
+        var check = WarehouseClient.stockCheck();
+        action("Warehouse stock check", check.isActive() ? check.label() : "light up every container until opened", new RowButton("Start", sh -> {
+            check.start(minecraft, dev.warehouse.shops.StockCheck.Kind.WAREHOUSE, null);
+            onClose();
+        }), new RowButton("Cancel", sh -> {
+            check.cancel("Stock check cancelled.");
+            rebuild();
+        }));
+        action("Highlights", WarehouseClient.highlights().active().size() + " active", new RowButton("Clear", sh -> {
+            WarehouseClient.highlights().clear();
+            rebuild();
+        }));
+        action("Pin held item to the chest you were looking at", "overrides the plan for that item", new RowButton("Pin", sh -> {
+            ItemStack st = heldOrNull();
+            ContainerEntry e = st == null ? null : lookedAtContainer();
+            if (st != null && e != null) {
+                WarehouseClient.organizer().setOverride(Fingerprinter.key(st), e.id);
+                Chat.info(Fingerprinter.displayName(st) + " now belongs in " + e.label() + ".");
+            }
+        }), new RowButton("Unpin", sh -> {
+            ItemStack st = heldOrNull();
+            if (st != null) {
+                WarehouseClient.organizer().setOverride(Fingerprinter.key(st), null);
+                Chat.info("Override removed for " + Fingerprinter.displayName(st) + ".");
+            }
+        }));
+        action("Forget the chest you were looking at", "drops it from the index; it is re-indexed when opened again", new RowButton("Forget", sh -> {
+            ContainerEntry e = lookedAtContainer();
+            if (e != null) {
+                WarehouseClient.index().remove(e.id);
+                Chat.info("Forgot " + e.label() + ".");
+            }
+        }));
+        action("Keep held item", "always leave it in your inventory on routes", new RowButton("Keep", sh -> {
+            ItemStack st = heldOrNull();
+            if (st != null) dev.warehouse.command.ShopCommands.setKeep(st, true);
+            rebuild();
+        }), new RowButton("Remove", sh -> {
+            ItemStack st = heldOrNull();
+            if (st != null) dev.warehouse.command.ShopCommands.setKeep(st, false);
+            rebuild();
+        }));
+        for (String keep : new ArrayList<>(cfg.alwaysKeep)) {
+            rows.add(new Row(null, "  kept: " + keep, "", "", 0xFFA0A0A0, null, List.of(), false).withButtons(new RowButton("Remove", sh -> {
+                cfg.alwaysKeep.remove(keep);
+                ConfigIO.save();
+                rebuild();
+            })));
+        }
+
+        header("Regions", "wand: " + cfg.wandItem.replace("minecraft:", "") + "  ·  next region drawn: " + (dev.warehouse.wand.WandHandler.nextType == dev.warehouse.region.RegionType.SHOP ? "shop" : "warehouse"), 0xFF80FF80);
+        action("Wand", "right-click two corners; type a name above and press Rename on a region", new RowButton(dev.warehouse.wand.WandHandler.nextType == dev.warehouse.region.RegionType.SHOP ? "Next: shop" : "Next: warehouse", sh -> {
+            dev.warehouse.wand.WandHandler.nextType = dev.warehouse.wand.WandHandler.nextType == dev.warehouse.region.RegionType.SHOP ? dev.warehouse.region.RegionType.WAREHOUSE : dev.warehouse.region.RegionType.SHOP;
+            rebuild();
+        }), new RowButton("Cancel selection", sh -> {
+            WarehouseClient.wand().selection.clear();
+            rebuild();
+        }));
+        for (Region r : new ArrayList<>(WarehouseClient.regions().all())) {
+            if (!filter.isEmpty() && !r.name.toLowerCase(Locale.ROOT).contains(filter) && !r.type.name().toLowerCase(Locale.ROOT).contains(filter)) continue;
+            String size = (r.maxX - r.minX + 1) + "×" + (r.maxY - r.minY + 1) + "×" + (r.maxZ - r.minZ + 1);
+            int chests = WarehouseClient.index().inRegion(r.id).size();
+            rows.add(new Row(null, r.name, r.type.name().toLowerCase(Locale.ROOT) + "  ·  " + size + " at " + r.minX + "," + r.minY + "," + r.minZ + "  ·  " + chests + " container(s)", "", 0xFFDDDDDD, sh -> {
+                WarehouseClient.highlights().spot(r.dimension, new net.minecraft.world.phys.Vec3((r.minX + r.maxX) / 2.0 + 0.5, (r.minY + r.maxY) / 2.0 + 0.5, (r.minZ + r.maxZ) / 2.0 + 0.5), ConfigIO.get().warehouseColor, ConfigIO.get().highlightSeconds, r.name);
+                onClose();
+            }, List.of(Component.literal("Click: highlight the region centre").withStyle(ChatFormatting.DARK_GRAY)), false).withButtons(
+                    new RowButton("Rename", sh -> {
+                        String n = toolsBox.getValue().trim();
+                        if (n.isEmpty()) Chat.error("Type the new name in the box first.");
+                        else if (WarehouseClient.regions().rename(r.name, n)) {
+                            toolsBox.setValue("");
+                            rebuild();
+                        }
+                    }),
+                    new RowButton("Type ▸", sh -> {
+                        var types = dev.warehouse.region.RegionType.values();
+                        r.type = types[(r.type.ordinal() + 1) % types.length];
+                        WarehouseClient.regions().markDirty();
+                        if (r.type == dev.warehouse.region.RegionType.SHOP) WarehouseClient.shops().forRegion(r);
+                        WarehouseClient.onRegionsChanged();
+                        WarehouseClient.organizer().invalidate();
+                        rebuild();
+                    }),
+                    new RowButton("Delete", sh -> {
+                        if (!sh) {
+                            Chat.warn("Shift-click Delete to remove '" + r.name + "'.");
+                            return;
+                        }
+                        WarehouseClient.regions().deleteById(r.id);
+                        WarehouseClient.onRegionsChanged();
+                        rebuild();
+                    })));
+        }
+
+        header("Claims", WarehouseClient.storage().claims.get().size() + " GriefPrevention anchor(s)", 0xFF60FF80);
+        action("Import claims", "runs /claimlist and reads the result; then capture each claim's bounds with the wand", new RowButton("Import", sh -> {
+            WarehouseClient.claimImporter().run(minecraft);
+            onClose();
+        }), new RowButton("Clear anchors", sh -> {
+            WarehouseClient.storage().claims.get().clear();
+            WarehouseClient.storage().claims.markDirty();
+            rebuild();
+        }));
+
+        var groups = WarehouseClient.itemGroups().all();
+        int samples = 0;
+        for (ItemGroup g : groups) samples += g.samples != null ? g.samples.size() : 0;
+        header("Custom items", groups.size() + " group(s), " + samples + " sample(s)  ·  " + dev.warehouse.items.CustomItemRules.active().size() + " rule(s)", 0xFFC0A0FF);
+        action("Rules and manifest", "reload custom_item_rules.json; write the manifest to the shared folder", new RowButton("Reload rules", sh -> {
+            WarehouseClient.manifestExporter().reloadRules(true);
+            rebuild();
+        }), new RowButton("Export manifest", sh -> WarehouseClient.manifestExporter().export(true)));
+        action("Prune groups that match nothing in the index", "", new RowButton("Prune", sh -> {
+            java.util.Set<ItemKey> seen = new java.util.HashSet<>();
+            for (ContainerEntry e : WarehouseClient.index().all()) for (StackRecord st : e.contents) {
+                seen.add(st.key);
+                if (st.nested != null) for (StackRecord n : st.nested) seen.add(n.key);
+            }
+            int removed = 0;
+            for (ItemGroup g : new ArrayList<>(groups)) {
+                boolean any = false;
+                for (ItemKey k : g.members) if (seen.contains(k)) any = true;
+                if (!any) {
+                    WarehouseClient.storage().items.get().remove(g);
+                    removed++;
+                }
+            }
+            WarehouseClient.storage().items.markDirty();
+            WarehouseClient.itemGroups().invalidate();
+            WarehouseClient.categories().invalidate();
+            Chat.info("Pruned " + removed + " group(s).");
+            rebuild();
+        }));
+        int gShown = 0;
+        var cats = WarehouseClient.categories();
+        for (ItemGroup g : groups) {
+            if (!filter.isEmpty() && !g.displayName.toLowerCase(Locale.ROOT).contains(filter) && !g.groupId.contains(filter)) continue;
+            if (gShown++ >= 80) {
+                header("...", "type part of a name above to filter the groups", 0xFF808080);
+                break;
+            }
+            ItemKey first = g.members.isEmpty() ? null : g.members.get(0);
+            String cat = first != null ? cats.categoryOf(first) : "?";
+            rows.add(new Row(first != null ? icon(first) : null, g.displayName, g.groupId + "  ·  " + g.members.size() + " fingerprint(s)  ·  " + cat + (g.categoryOverride != null ? " (set by you)" : ""), "", 0xFFDDDDDD, null, List.of(), false).withButtons(
+                    new RowButton("Category ▸", sh -> {
+                        List<String> order = dev.warehouse.organizer.Categorizer.DEFAULT_ORDER;
+                        int idx = g.categoryOverride == null ? -1 : order.indexOf(g.categoryOverride);
+                        int next = sh ? idx - 1 : idx + 1;
+                        if (next >= order.size()) next = -1;
+                        if (next < -1) next = order.size() - 1;
+                        WarehouseClient.itemGroups().setCategory(g, next < 0 ? null : order.get(next));
+                        WarehouseClient.categories().invalidate();
+                        WarehouseClient.organizer().invalidate();
+                        rebuild();
+                    }),
+                    new RowButton("Rename", sh -> {
+                        String n = toolsBox.getValue().trim();
+                        if (n.isEmpty()) Chat.error("Type the new name in the box first.");
+                        else if (WarehouseClient.itemGroups().rename(g, n)) {
+                            toolsBox.setValue("");
+                            rebuild();
+                        }
+                    })));
+        }
+
+        header("Data", "config/warehouse/" + WarehouseClient.storage().serverKey(), 0xFFFFA040);
+        action("Export a bundle of this server's data", "to the exports folder", new RowButton("Export", sh -> {
+            String f = WarehouseClient.exporter().export(null, false);
+            if (f != null) Chat.info("Exported " + f);
+        }), new RowButton("With lost log", sh -> {
+            String f = WarehouseClient.exporter().export(null, true);
+            if (f != null) Chat.info("Exported " + f);
+        }));
+        for (String file : WarehouseClient.importer().availableFiles()) {
+            rows.add(new Row(null, "  " + file, "", "", 0xFFA0A0A0, null, List.of(), false).withButtons(new RowButton("Merge", sh -> {
+                var r = WarehouseClient.importer().run(file, dev.warehouse.export.Importer.Mode.MERGE);
+                if (r.ok()) Chat.info(r.message());
+                else Chat.error(r.message());
+                rebuild();
+            }), new RowButton("Replace", sh -> {
+                if (!sh) {
+                    Chat.warn("Shift-click Replace to overwrite this server's data with " + file + ".");
+                    return;
+                }
+                var r = WarehouseClient.importer().run(file, dev.warehouse.export.Importer.Mode.REPLACE);
+                if (r.ok()) Chat.info(r.message());
+                else Chat.error(r.message());
+                rebuild();
+            })));
+        }
+        for (String what : List.of("index", "lost", "plan", "items", "all")) {
+            action("Clear " + what, "shift-click to confirm", new RowButton("Clear", sh -> {
+                if (!sh) {
+                    Chat.warn("Shift-click to clear " + what + ".");
+                    return;
+                }
+                var st = WarehouseClient.storage();
+                if (what.equals("index") || what.equals("all")) WarehouseClient.index().clear();
+                if (what.equals("lost") || what.equals("all")) WarehouseClient.lostLog().clear();
+                if (what.equals("plan") || what.equals("all")) WarehouseClient.organizer().clearPlan();
+                if (what.equals("items") || what.equals("all")) {
+                    st.items.get().clear();
+                    st.items.markDirty();
+                    WarehouseClient.itemGroups().invalidate();
+                    WarehouseClient.categories().invalidate();
+                }
+                st.flushAll();
+                Chat.info("Cleared " + what + ".");
+                rebuild();
+            }));
+        }
+        footer = "Everything here is also a /warehouse command";
     }
 
     private static @Nullable ItemStack icon(ItemKey key) {
@@ -681,7 +1321,7 @@ public final class SearchScreen extends Screen {
         g.text(getFont(), "Warehouse", 20, 8, 0xFFFFFFFF);
         String server = WarehouseClient.storage().serverKey();
         if (server != null) g.text(getFont(), server, 20 + getFont().width("Warehouse") + 8, 8, 0xFF808080);
-        if (tab == Tab.MISPLACED) g.text(getFont(), "min ×" + misplacedMin, 42, 49, 0xFFFFFFFF);
+        if (tab == Tab.MISPLACED) g.text(getFont(), "min ×" + misplacedMin, 42, controlsY + 5, 0xFFFFFFFF);
 
         if (tab == Tab.OVERVIEW && dashboard != null) {
             dashboard.draw(g, getFont(), listLeft, listTop, listRight, listBottom, mouseX, mouseY);
@@ -711,9 +1351,18 @@ public final class SearchScreen extends Screen {
                 }
                 x += 22;
                 int nameColor = r.header ? r.rightColor : 0xFFFFFFFF;
-                g.text(getFont(), getFont().plainSubstrByWidth(r.name, 200), x, y + 2, nameColor);
-                if (!r.detail.isEmpty()) g.text(getFont(), getFont().plainSubstrByWidth(r.detail, listRight - x - 120), x, y + 11, 0xFFA0A0A0);
+                List<int[]> rects = buttonRects(r);
+                int textLimit = rects.isEmpty() ? listRight - x - (r.right.isEmpty() ? 8 : getFont().width(r.right) + 12) : rects.get(0)[0] - x - 6;
+                g.text(getFont(), getFont().plainSubstrByWidth(r.name, Math.min(260, textLimit)), x, y + 2, nameColor);
+                if (!r.detail.isEmpty()) g.text(getFont(), getFont().plainSubstrByWidth(r.detail, Math.max(20, textLimit)), x, y + 11, 0xFFA0A0A0);
                 if (!r.right.isEmpty()) g.text(getFont(), r.right, listRight - 6 - getFont().width(r.right), y + 6, r.rightColor);
+                for (int b = 0; b < rects.size(); b++) {
+                    int[] rc = rects.get(b);
+                    boolean bh = mouseX >= rc[0] && mouseX < rc[1] && mouseY >= y + 3 && mouseY < y + ROW_H - 3;
+                    g.fill(rc[0], y + 3, rc[1], y + ROW_H - 3, bh ? 0xA0FFFFFF : 0x50FFFFFF);
+                    g.outline(rc[0], y + 3, rc[1] - rc[0], ROW_H - 6, 0x80FFFFFF);
+                    g.text(getFont(), r.buttons.get(b).label(), rc[0] + 4, y + 6, bh ? 0xFF101010 : 0xFFFFFFFF);
+                }
                 if (hover) hovered = r;
             }
             y += ROW_H;
@@ -746,10 +1395,20 @@ public final class SearchScreen extends Screen {
         }
         if (mx >= listLeft && mx < listRight && my >= listTop && my < listBottom) {
             int idx = (int) ((my - listTop + scroll) / ROW_H);
-            if (idx >= 0 && idx < rows.size() && rows.get(idx).onClick != null) {
-                selected = idx;
-                rows.get(idx).onClick.run(event.hasShiftDown());
-                return true;
+            if (idx >= 0 && idx < rows.size()) {
+                Row r = rows.get(idx);
+                List<int[]> rects = buttonRects(r);
+                for (int b = 0; b < rects.size(); b++) {
+                    if (mx >= rects.get(b)[0] && mx < rects.get(b)[1]) {
+                        r.buttons.get(b).action().run(event.hasShiftDown());
+                        return true;
+                    }
+                }
+                if (r.onClick != null) {
+                    selected = idx;
+                    r.onClick.run(event.hasShiftDown());
+                    return true;
+                }
             }
         }
         return false;

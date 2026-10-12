@@ -28,7 +28,7 @@ public final class ShoppingListHud {
         if (plan == null || !planner.hudVisible() || !ConfigIO.get().shoppingListHud || mc.player == null) return;
         if (mc.gui.screen() instanceof dev.warehouse.ui.SearchScreen) return;
         Font font = mc.font;
-        String title = "Craft " + plan.count() + " × " + plan.target().getHoverName().getString();
+        String title = plan.title();
         List<Row> rows = new ArrayList<>();
         int maxRows = Math.max(4, ConfigIO.get().shoppingListMaxRows);
         for (CraftPlanner.Line l : plan.lines()) {

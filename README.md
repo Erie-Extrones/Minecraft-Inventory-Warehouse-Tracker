@@ -60,6 +60,18 @@ Values come from prices you have seen. The mod records them for you:
 
 Each item's value is the **median** of the observations on one side, sell by default (`valuationSide`), ignoring anything older than `priceMaxAgeDays`; when only the other side has been seen it is used and marked "buy only". Custom items are priced per group, so every variant of a key or kit shares one price. Values show on item tooltips, on the sneak card (held item, chest you look at, your whole inventory) and in `/warehouse value`. Shulker contents count; the boxes do not.
 
+## The screen: everything without commands
+
+Open it with the **Warehouse** button above your inventory or the *Open warehouse search* key. Tabs:
+
+- **Overview**: the dashboard. **Search**: every item the mod has seen, with Craft and Price buttons per row.
+- **Craft**: type an item name (or hold the item), set the count, press Plan. The plan shows each ingredient with where to get it, Gather starts the route, Clear removes it. **Prices**: pick an item (held, or by name), type an amount and press Buy price or Sell price; every recorded observation is listed with a Delete button.
+- **Unsorted**: inventory stacks with no home, with a Keep button per stack. **Lost**, **Misplaced**, **Plan**, **Condense** as before.
+- **Shops**: per shop, Do inventory and Restock route; per item, Price and Min read the amount box, Plan lists what restocking that item takes.
+- **Tools**: switches for every guide and HUD, find held item, the clear and sort routes, stock check, pin or forget the chest you were looking at, the keep list, regions (rename, change type, delete), claims import, custom item groups (category, rename, prune), rules reload, manifest export, data export, import (merge or replace) and clearing.
+
+Chest screens get buttons of their own: Take misplaced, Deposit matching, Pick up restock, **Plan refill** (shop chests: lists everything needed to fill the chest the way it is stocked, shulker contents included) and Forget chest.
+
 ## Crafting planner and shopping list
 
 `/warehouse craft <count> [item]` (held item when omitted) works out what you need to make that many: recipes are expanded down to base ingredients, your inventory is used first, then the warehouse, and intermediates are crafted when their ingredients can be found. The result is a shopping list pinned to the top right of the screen until you clear it:
@@ -67,6 +79,7 @@ Each item's value is the **median** of the observations on one side, sell by def
 - green: you carry enough; yellow: the warehouse has it, with the chest to visit; red: nobody has it, with how many are missing.
 - `/warehouse craft route` starts a gather route through the warehouse chests holding what you lack (a **Pick up restock** button appears in each); `/warehouse craft show` prints the full breakdown with the craft steps; `/warehouse craft clear`; `/warehouse craft hud off`.
 - Recipes come from the client recipe book, which only has what you have unlocked. With the JEI add-on installed, JEI's recipes are used too.
+- **Plan refill** in a shop chest, or **Plan** on a Shops row, builds the same list for restocking: each item is topped up to full stacks in the slots it occupies, and a chest of shulkers full of oak planks becomes shulker boxes plus the planks to fill them, each expanded to what you must actually fetch or craft.
 
 ## JEI add-on
 

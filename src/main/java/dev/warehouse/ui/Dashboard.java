@@ -145,7 +145,7 @@ public final class Dashboard {
         var check = WarehouseClient.stockCheck();
         if (check.isActive()) d.chips.add(new Chip(check.label(), 0xFFFFD060, SearchScreen.Tab.OVERVIEW));
         var craft = WarehouseClient.craftPlanner().active();
-        if (craft != null) d.chips.add(new Chip("Crafting " + craft.count() + "× " + craft.target().getHoverName().getString() + (craft.missingLines() > 0 ? " · " + craft.missingLines() + " missing" : ""), 0xFFC0A0FF, SearchScreen.Tab.OVERVIEW));
+        if (craft != null) d.chips.add(new Chip(craft.title() + (craft.missingLines() > 0 ? " · " + craft.missingLines() + " missing" : ""), 0xFFC0A0FF, SearchScreen.Tab.CRAFT));
         return d;
     }
 

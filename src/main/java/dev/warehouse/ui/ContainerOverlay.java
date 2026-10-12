@@ -50,17 +50,41 @@ public final class ContainerOverlay {
                 .bounds(right + 4, top + 44, 90, 16)
                 .tooltip(Tooltip.create(Component.literal("Quick-move the stacks the shop restock still needs")))
                 .build();
+        Button refill = Button.builder(Component.literal("Plan refill"), b -> {
+            if (s.entry != null) {
+                WarehouseClient.craftPlanner().startRefill(mc, s.entry);
+                if (WarehouseClient.craftPlanner().active() != null) SearchScreen.open(mc, SearchScreen.Tab.CRAFT);
+            }
+        }).bounds(right + 4, top + 64, 90, 16)
+                .tooltip(Tooltip.create(Component.literal("List everything needed to fill this chest the way it is stocked, shulker contents included, and where to get it")))
+                .build();
+        Button forget = Button.builder(Component.literal("Forget chest"), b -> {
+            if (s.entry != null) {
+                WarehouseClient.index().remove(s.entry.id);
+                dev.warehouse.Chat.info("Forgot " + s.entry.label() + ". It is re-indexed the next time you open it inside a region.");
+                s.entry = null;
+            }
+        }).bounds(right + 4, top + 84, 90, 16)
+                .tooltip(Tooltip.create(Component.literal("Drop this container from the index")))
+                .build();
         take.visible = false;
         deposit.visible = false;
         pickUp.visible = false;
+        refill.visible = false;
+        forget.visible = false;
         Screens.getWidgets(screen).add(take);
         Screens.getWidgets(screen).add(deposit);
         Screens.getWidgets(screen).add(pickUp);
+        Screens.getWidgets(screen).add(refill);
+        Screens.getWidgets(screen).add(forget);
 
         ScreenEvents.afterTick(screen).register(sc -> {
             take.visible = s.entry != null && !misplacedSlots(s).isEmpty();
             deposit.visible = s.entry != null && !matchingInventorySlots(mc, s).isEmpty();
             pickUp.visible = s.entry != null && !restockSlots(mc, s).isEmpty();
+            boolean shopChest = s.entry != null && s.entry.regionId != null && WarehouseClient.shops().byId(s.entry.regionId) != null;
+            refill.visible = shopChest && !s.entry.contents.isEmpty();
+            forget.visible = s.entry != null && s.entry.lastSeenEpochMs > 0;
         });
         ScreenEvents.afterBackground(screen).register((sc, graphics, mx, my, tick) -> draw(mc, graphics, s, left, top));
     }

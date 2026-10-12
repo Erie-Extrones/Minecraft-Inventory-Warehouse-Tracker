@@ -55,7 +55,7 @@ public final class CraftCommands {
             Chat.info("No craft plan. /warehouse craft <count> [item].");
             return 1;
         }
-        Chat.info("Crafting " + p.count() + " × " + p.target().getHoverName().getString() + ":");
+        Chat.info(p.title() + ":");
         for (CraftPlanner.Line l : p.lines()) {
             String where = l.where().isEmpty() ? "" : "  @ " + l.where().get(0).posString() + (l.where().size() > 1 ? " +" + (l.where().size() - 1) : "");
             ChatFormatting f = l.satisfiedByInventory() ? ChatFormatting.GREEN : l.covered() ? ChatFormatting.YELLOW : ChatFormatting.RED;
@@ -76,7 +76,7 @@ public final class CraftCommands {
             Chat.info(planner.active().gathered() ? "You already carry everything." : "Nothing to gather: the warehouse has none of what is missing.");
             return 1;
         }
-        WarehouseClient.clearMode().startFetch(mc, fetch, planner.fetchNames(), "Gather for " + planner.active().target().getHoverName().getString());
+        WarehouseClient.clearMode().startFetch(mc, fetch, planner.fetchNames(), "Gather: " + planner.active().title());
         return 1;
     }
 
