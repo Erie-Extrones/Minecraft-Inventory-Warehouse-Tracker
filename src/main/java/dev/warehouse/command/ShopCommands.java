@@ -277,7 +277,7 @@ public final class ShopCommands {
         if (st == null) return 0;
         ItemKey key = Fingerprinter.key(st);
         WarehouseClient.categories().learn(st, key);
-        WarehouseClient.shops().setSellPrice(s, PriceKeys.of(key), amount);
+        WarehouseClient.shops().setSellPrice(s, ShopManager.priceKey(dev.warehouse.shops.StockUnit.of(st)), amount);
         Chat.info(WarehouseClient.shops().name(s) + ": " + Fingerprinter.displayName(st) + (amount == null ? " price cleared." : " sells for " + Valuation.money(amount) + "."));
         return 1;
     }
@@ -288,7 +288,7 @@ public final class ShopCommands {
         ItemStack st = held(mc);
         if (st == null) return 0;
         ItemKey key = Fingerprinter.key(st);
-        WarehouseClient.shops().setRestockMin(s, PriceKeys.of(key), count);
+        WarehouseClient.shops().setRestockMin(s, ShopManager.priceKey(dev.warehouse.shops.StockUnit.of(st)), count);
         Chat.info(WarehouseClient.shops().name(s) + ": restock " + Fingerprinter.displayName(st) + (count == null ? " threshold back to automatic." : " when below " + count + "."));
         return 1;
     }

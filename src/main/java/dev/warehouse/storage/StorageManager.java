@@ -30,8 +30,9 @@ public final class StorageManager {
     public final JsonStore<List<LostEntry>> lost = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<LostEntry>>() {}.getType(), ArrayList::new);
     public final JsonStore<List<dev.warehouse.prices.PriceObservation>> prices = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<dev.warehouse.prices.PriceObservation>>() {}.getType(), ArrayList::new);
     public final JsonStore<List<dev.warehouse.shops.Shop>> shops = new JsonStore<>(GsonHolder.GSON, new TypeToken<List<dev.warehouse.shops.Shop>>() {}.getType(), ArrayList::new);
+    public final JsonStore<dev.warehouse.inventory.UsageData> usage = new JsonStore<>(GsonHolder.GSON, dev.warehouse.inventory.UsageData.class, dev.warehouse.inventory.UsageData::new);
 
-    private final List<JsonStore<?>> all = List.of(regions, claims, index, items, plan, lost, prices, shops);
+    private final List<JsonStore<?>> all = List.of(regions, claims, index, items, plan, lost, prices, shops, usage);
     private String serverKey;
     private Path serverDir;
     private final List<Runnable> onBindListeners = new ArrayList<>();
@@ -70,6 +71,7 @@ public final class StorageManager {
         lost.bind(serverDir.resolve("lost.json"));
         prices.bind(serverDir.resolve("prices.json"));
         shops.bind(serverDir.resolve("shops.json"));
+        usage.bind(serverDir.resolve("usage.json"));
         try {
             java.nio.file.Files.createDirectories(serverDir);
         } catch (Exception e) {

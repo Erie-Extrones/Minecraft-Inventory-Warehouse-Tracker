@@ -13,6 +13,8 @@ public final class Shop {
         public long whenEpochMs;
         public Map<String, Integer> counts = new LinkedHashMap<>();
         public Map<String, String> names = new LinkedHashMap<>();
+        /** Per-box contents of packed units, so an OUT unit can still be planned. */
+        public Map<String, List<dev.warehouse.index.StackRecord>> templates = new LinkedHashMap<>();
         public int containers;
         public double value;
     }

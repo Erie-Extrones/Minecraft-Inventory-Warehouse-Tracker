@@ -79,7 +79,7 @@ Chest screens get buttons of their own: Take misplaced, Deposit matching, Pick u
 - green: you carry enough; yellow: the warehouse has it, with the chest to visit; red: nobody has it, with how many are missing.
 - `/warehouse craft route` starts a gather route through the warehouse chests holding what you lack (a **Pick up restock** button appears in each); `/warehouse craft show` prints the full breakdown with the craft steps; `/warehouse craft clear`; `/warehouse craft hud off`.
 - Recipes come from the client recipe book, which only has what you have unlocked. With the JEI add-on installed, JEI's recipes are used too.
-- **Plan refill** in a shop chest, or **Plan** on a Shops row, builds the same list for restocking: each item is topped up to full stacks in the slots it occupies, and a chest of shulkers full of oak planks becomes shulker boxes plus the planks to fill them, each expanded to what you must actually fetch or craft.
+- **Plan refill** in a shop chest, or **Plan** on a Shops row, builds the same list for restocking: each item is topped up to full stacks in the slots it occupies, and a chest of shulkers full of oak planks becomes shulker boxes plus the planks to fill them, each expanded to what you must actually fetch or craft. The list is live: it re-reads the chest whenever it is open, so what you put in drops off the list and the plan ends on its own once the chest is full.
 
 ## JEI add-on
 
@@ -92,7 +92,8 @@ A shop is a region of type **shop**: run `/warehouse shop wand`, then draw it wi
 - **Prices.** Hold an item in the shop and `/warehouse shop price <amount>` sets what customers pay you; your own QuickShop blocks set it automatically. Stock is valued at your price, falling back to the market median where you have not set one.
 - **Inventory.** `/warehouse shop inventory` (or **Do inventory** on the Shops tab) highlights every container in the shop; each one unhighlights when you open it, and when the last one is opened the stock is recorded and the shop report opens: every item with stock, threshold, LOW/OUT status, price, value, and how many sold since the previous inventory with the revenue that implies. The mod reminds you on join and when you walk into a shop whose last inventory is older than `shopInventoryReminderHours`.
 - **Thresholds.** An item is LOW below a quarter of the most the shop ever held of it (`shopRestockFraction`); `/warehouse shop min <n>` while holding it sets a fixed threshold.
-- **Restock route.** `/warehouse shop restock` (or **Restock route**) works out what is low, how much the warehouse has, and walks you to the warehouse chests holding it (a **Pick up restock** button appears in those chests) and then to the shop chests to deliver. Items the warehouse does not have are listed, not routed.
+- **Packed shulkers.** A shulker box with contents is its own stock line, named after what is in it ("Shulker Box of Oak Log"), with its own threshold, price (set on the box, as QuickShop prices it; the box item's price is the fallback) and sold count. Loose logs elsewhere in the shop are a separate line.
+- **Restock route.** `/warehouse shop restock` (or **Restock route**) works out what is low, how much the warehouse has, and walks you to the warehouse chests holding it (a **Pick up restock** button appears in those chests) and then to the shop chests to deliver. Packed shulkers are matched by contents, so only boxes packed the same way count. The route tracks the whole shortfall: what the warehouse has is routed right away, and the rest is routed to the shop as soon as you carry it. Whatever the warehouse does not hold ready-made goes to the craft planner as a live "Build for <shop>" shopping list: boxes plus the items to fill them, expanded to what you must fetch or craft, shrinking as you build and deliver.
 
 ## Condensing into shulkers
 
@@ -109,6 +110,10 @@ Filled shulkers are filed by the category of their dominant contents, so once pa
 Bind the *Toggle clear-inventory mode* key or run `/warehouse clearmode`. Every non-essential stack in your inventory lights up its destination chest, colored by category and labeled with the item and count. The chests are ordered into a short walking route from where you stand, numbered, with a particle trail leading to stop 1. Open a lit chest and press **Deposit matching** to quick-move everything that belongs there. The mode exits on its own when nothing is left to put away. Hold an item and run `/warehouse keep` to always leave it in your inventory (`keep remove` undoes it, `keep list` shows the rules).
 
 Essentials are kept: equipped armor, offhand, tools and weapons on the hotbar, food, custom gear, and anything on the `alwaysKeep` list in the config.
+
+## Inventory usage
+
+The mod watches what you actually use: swinging or using the held item, placing, eating, throwing, tool wear and crafting all count as use of that item kind, and the times are kept per server in `usage.json`. When your inventory fills up it says so in chat and lists the stacks that have not been used for 30 minutes (`unusedAfterMinutes`), essentials excluded, so you know what to put away; the message repeats at most every 10 minutes (`inventoryFullAlertCooldownMinutes`, `inventoryFullAlert` turns it off). With **Mark unused items when full** on (`highlightUnusedWhenFull`, the default) those stacks are tinted purple in your inventory and in every chest screen from the moment the inventory is full until 6 slots are free again (`unusedHighlightClearAtFreeSlots`), and their tooltip says how long they have been idle. Both switches are on the Tools tab. Clear inventory mode is the quickest way to put them away.
 
 ## Lost items
 
@@ -222,7 +227,7 @@ config/warehouse/
   config.json              global settings: wand, colors, particle guide, prior zone shares, essentials rules, strip lists, shared folder
   custom_item_rules.json   your overrides for plugin item sorting (optional)
   <server-key>/            one folder per server address, or sp-<world> for singleplayer
-    regions.json  claims.json  index.json  items.json  plan.json  lost.json  prices.json  shops.json
+    regions.json  claims.json  index.json  items.json  plan.json  lost.json  prices.json  shops.json  usage.json
   exports/                 export bundles
 ```
 

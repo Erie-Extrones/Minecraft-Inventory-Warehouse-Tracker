@@ -176,6 +176,17 @@ public final class ModConfig {
     /** Minutes between chat hints for the same zone. */
     public int condenseHintCooldownMinutes = 30;
 
+    // ---- Inventory usage ----
+    /** Say in chat when the inventory fills up, listing the stacks that have not been used lately. */
+    public boolean inventoryFullAlert = true;
+    /** A stack counts as unused after this many minutes without being swung, placed, eaten, thrown, worn down or crafted with. */
+    public int unusedAfterMinutes = 30;
+    /** Minutes between two "inventory full" messages. */
+    public int inventoryFullAlertCooldownMinutes = 10;
+    /** Mark unused stacks in inventory screens once the inventory is full, until this many slots are free again. */
+    public boolean highlightUnusedWhenFull = true;
+    public int unusedHighlightClearAtFreeSlots = 6;
+
     // ---- Clear inventory mode essentials ----
     public boolean essentialEquippedArmor = true;
     public boolean essentialOffhand = true;

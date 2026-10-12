@@ -68,6 +68,7 @@ public final class WarehouseClient implements ClientModInitializer {
     private dev.warehouse.export.Exporter exporter;
     private dev.warehouse.export.Importer importer;
     private InventoryTracker inventoryTracker;
+    private dev.warehouse.inventory.UsageTracker usage;
     private HeldItemGuide heldItemGuide;
     private GuidePath guidePath;
     private dev.warehouse.organizer.Condenser condenser;
@@ -161,6 +162,10 @@ public final class WarehouseClient implements ClientModInitializer {
         return instance.inventoryTracker;
     }
 
+    public static dev.warehouse.inventory.UsageTracker usage() {
+        return instance.usage;
+    }
+
     public static GuidePath guidePath() {
         return instance.guidePath;
     }
@@ -247,6 +252,7 @@ public final class WarehouseClient implements ClientModInitializer {
         });
         importer = new dev.warehouse.export.Importer(storage);
         inventoryTracker = new InventoryTracker();
+        usage = new dev.warehouse.inventory.UsageTracker(storage.usage);
         heldItemGuide = new HeldItemGuide();
         guidePath = new GuidePath();
         staleSweeper = new StaleContainerSweeper(index);
@@ -267,6 +273,7 @@ public final class WarehouseClient implements ClientModInitializer {
         TooltipProvider.register();
         DropDetector.register();
         InventoryButton.register();
+        dev.warehouse.ui.UnusedOverlay.register();
         new LookHud().register();
         new dev.warehouse.craft.ShoppingListHud().register();
         WarehouseCommands.register();
@@ -326,6 +333,7 @@ public final class WarehouseClient implements ClientModInitializer {
         heldItemGuide.tick(mc);
         guidePath.tick(mc);
         inventoryTracker.tick(mc);
+        usage.tick(mc);
         condenser.tick(mc);
         manifestExporter.tick(mc);
         signPriceReader.tick(mc);
