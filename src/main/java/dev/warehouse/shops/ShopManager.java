@@ -167,8 +167,36 @@ public final class ShopManager {
         return marketValue(u);
     }
 
+    /**
+     * The packed unit sold at a shop block: the dominant box of {@code boxKey}'s kind with contents in the indexed container at
+     * the clicked block or next to it (ChestShop signs sit on or beside their chest). Null when none is known there.
+     */
+    public @Nullable StockUnit packedUnitNear(String dim, BlockPos pos, ItemKey boxKey) {
+        Map<StockUnit, Integer> seen = new LinkedHashMap<>();
+        List<BlockPos> probe = new ArrayList<>();
+        probe.add(pos);
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) probe.add(pos.relative(d));
+        java.util.Set<UUID> done = new java.util.HashSet<>();
+        for (BlockPos p : probe) {
+            ContainerEntry e = WarehouseClient.index().atBlock(dim, p);
+            if (e == null || !done.add(e.id)) continue;
+            for (StackRecord r : e.contents) {
+                if (r.nested == null || r.nested.isEmpty() || !r.key.itemId.equals(boxKey.itemId)) continue;
+                seen.merge(StockUnit.of(r), r.count, Integer::sum);
+            }
+        }
+        StockUnit best = null;
+        for (Map.Entry<StockUnit, Integer> en : seen.entrySet()) if (best == null || en.getValue() > seen.get(best)) best = en.getKey();
+        return best;
+    }
+
     public static @Nullable Double marketValue(StockUnit u) {
         Valuation val = WarehouseClient.valuation();
+        if (u.packed()) {
+            // Prices seen for exactly this packed box beat box-plus-contents arithmetic.
+            Valuation.Value direct = val.valueForKeys(List.of(priceKey(u)));
+            if (direct != null) return direct.unit();
+        }
         Valuation.Value box = val.unitValue(u.key);
         if (!u.packed() || u.perBox == null) return box != null ? box.unit() : null;
         double sum = box != null ? box.unit() : 0;

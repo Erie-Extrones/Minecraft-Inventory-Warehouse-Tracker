@@ -171,10 +171,12 @@ public final class ShopCommands {
         if (st == null) return 0;
         ItemKey key = Fingerprinter.key(st);
         WarehouseClient.categories().learn(st, key);
-        String name = Fingerprinter.displayName(st);
+        dev.warehouse.shops.StockUnit unit0 = dev.warehouse.shops.StockUnit.of(st);
+        String name = unit0.packed() ? unit0.name(Fingerprinter.displayName(st)) : Fingerprinter.displayName(st);
         double unit = amount / qty;
-        WarehouseClient.prices().add(new PriceObservation(PriceKeys.of(key), name, unit, qty, sell, shop, "manual"));
-        Chat.info("Noted " + name + " at " + Valuation.money(unit) + " each (" + (sell ? "sell" : "buy") + (shop != null ? ", " + shop : "") + "). Now valued at " + describe(key) + ".");
+        WarehouseClient.prices().add(new PriceObservation(ShopManager.priceKey(unit0), name, unit, qty, sell, shop, "manual"));
+        String now = unit0.packed() ? (ShopManager.marketValue(unit0) == null ? "nothing yet" : Valuation.money(ShopManager.marketValue(unit0)) + " each") : describe(key);
+        Chat.info("Noted " + name + " at " + Valuation.money(unit) + " each (" + (sell ? "sell" : "buy") + (shop != null ? ", " + shop : "") + "). Now valued at " + now + ".");
         return 1;
     }
 
@@ -207,6 +209,12 @@ public final class ShopCommands {
         ItemStack st = held(mc);
         if (st == null) return 0;
         int n = 0;
+        dev.warehouse.shops.StockUnit unit0 = dev.warehouse.shops.StockUnit.of(st);
+        if (unit0.packed()) {
+            n = WarehouseClient.prices().clear(ShopManager.priceKey(unit0));
+            Chat.info("Removed " + n + " price(s) for " + unit0.name(Fingerprinter.displayName(st)) + ". Hold an empty box to clear the plain box's prices.");
+            return 1;
+        }
         for (String pk : PriceKeys.candidates(Fingerprinter.key(st))) n += WarehouseClient.prices().clear(pk);
         Chat.info("Removed " + n + " price(s) for " + Fingerprinter.displayName(st) + ".");
         return 1;

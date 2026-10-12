@@ -38,6 +38,7 @@ public final class Valuation {
     private final PriceBook book;
     private final Map<ItemKey, Value> cache = new HashMap<>();
     private final Map<ItemKey, Boolean> missing = new HashMap<>();
+    private final Map<List<String>, Value> keyCache = new HashMap<>();
 
     public Valuation(PriceBook book) {
         this.book = book;
@@ -47,6 +48,7 @@ public final class Valuation {
     public void invalidate() {
         cache.clear();
         missing.clear();
+        keyCache.clear();
     }
 
     public static String money(double amount) {
@@ -58,21 +60,25 @@ public final class Valuation {
         Value v = cache.get(key);
         if (v != null) return v;
         if (missing.containsKey(key)) return null;
+        v = valueForKeys(PriceKeys.candidates(key));
+        if (v == null) missing.put(key, Boolean.TRUE);
+        else cache.put(key, v);
+        return v;
+    }
+
+    /** Value from the observations stored under any of the given price keys (for example a packed unit's "unit:" key). */
+    public @Nullable Value valueForKeys(List<String> keys) {
+        if (keyCache.containsKey(keys)) return keyCache.get(keys);
         ModConfig cfg = ConfigIO.get();
         boolean sell = !"buy".equalsIgnoreCase(cfg.valuationSide);
-        List<String> keys = PriceKeys.candidates(key);
         PriceBook.Stats s = book.stats(keys, sell);
         boolean fallback = false;
         if (s == null && cfg.valuationFallbackOtherSide) {
             s = book.stats(keys, !sell);
             fallback = s != null;
         }
-        if (s == null) {
-            missing.put(key, Boolean.TRUE);
-            return null;
-        }
-        v = new Value(s.median(), s.sell(), fallback, s.count(), s.min(), s.max(), s.newestEpochMs());
-        cache.put(key, v);
+        Value v = s == null ? null : new Value(s.median(), s.sell(), fallback, s.count(), s.min(), s.max(), s.newestEpochMs());
+        keyCache.put(List.copyOf(keys), v);
         return v;
     }
 
