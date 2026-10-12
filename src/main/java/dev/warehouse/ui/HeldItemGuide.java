@@ -48,12 +48,14 @@ public final class HeldItemGuide {
 
     public void tick(Minecraft mc) {
         if (!ConfigIO.get().heldItemGuide || mc.player == null || mc.level == null) return;
-        if (WarehouseClient.clearMode().isActive()) return; // clear mode already lights destinations
+        var mode = WarehouseClient.clearMode();
+        if (mode.lightsDestinations()) return; // clear / sort mode already lights every destination
         ItemStack held = mc.player.getMainHandItem();
         if (held.isEmpty()) {
             invalidate();
             return;
         }
+        if (mode.isActive() && mode.restockWanted(held) > 0) return; // the restock route lights the shop for this one
         String dim = RegionManager.dimensionId(mc.level);
         if (WarehouseClient.regions().warehouseAt(dim, mc.player.blockPosition()) == null) return;
 

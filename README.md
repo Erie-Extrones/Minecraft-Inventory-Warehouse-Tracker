@@ -109,6 +109,8 @@ Filled shulkers are filed by the category of their dominant contents, so once pa
 
 Bind the *Toggle clear-inventory mode* key or run `/warehouse clearmode`. Every non-essential stack in your inventory lights up its destination chest, colored by category and labeled with the item and count. The chests are ordered into a short walking route from where you stand, numbered, with a particle trail leading to stop 1. Open a lit chest and press **Deposit matching** to quick-move everything that belongs there. The mode exits on its own when nothing is left to put away. Hold an item and run `/warehouse keep` to always leave it in your inventory (`keep remove` undoes it, `keep list` shows the rules).
 
+Only one route runs at a time: starting clear or sort mode while a gather or restock route is on ends that route first. During a gather or restock route the held-item guide keeps working for everything the route is not carrying, so you can still find where to put things when your inventory fills up; the route says so when fewer than 4 slots are free. A gather route ends on its own when its craft plan is cleared or completed.
+
 Essentials are kept: equipped armor, offhand, tools and weapons on the hotbar, food, custom gear, and anything on the `alwaysKeep` list in the config.
 
 ## Inventory usage
