@@ -11,6 +11,8 @@ Client-only Fabric mod that remembers where your items live, decides which chest
 - Misplaced tab and **Sort route**: walk a numbered tour to pull wrong-chest items and put them where they belong. Clear-inventory mode does the same for whatever you carry.
 - 23 categories including Colored Blocks, Workstations, Enchanting, Keys & Currency, Infinite Items and Collectibles; plugin items (ExecutableItems, ExcellentCrates, ItemsAdder, MMOItems) are recognised and grouped by pack.
 - Lost log for drops and deaths, export/import between PCs, chests that disappear are forgotten automatically.
+- **Everything in the GUI**: Craft, Prices and Tools tabs, per-row buttons (Craft, Price, Keep, Delete...), and chest-screen buttons for refill planning and forgetting a chest. Commands remain for those who want them.
+- **Plan refill** on a shop chest lists everything needed to fill it as stocked, including the contents of shulker boxes.
 - **Crafting planner**: `/warehouse craft <count> [item]` expands recipes, uses your inventory then the warehouse, crafts intermediates, and pins a colour-coded shopping list to the screen; a gather route walks you to the chests.
 - **JEI add-on** (`warehouse-jei`): find the JEI item under the mouse in your warehouse, plan a craft of it, and let the planner use JEI's recipes.
 - `/warehouse keep` marks the held item as essential.

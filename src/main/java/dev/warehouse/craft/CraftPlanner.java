@@ -45,7 +45,10 @@ public final class CraftPlanner {
     /** An intermediate (or the target) the plan crafts. */
     public record Step(ItemStack result, String name, int crafts, int makes, String kind, ItemStack station) {}
 
-    public record Plan(ItemStack target, int count, List<Line> lines, List<Step> steps, List<String> notes, long createdMs) {
+    /** One thing the plan must produce: {@code craftAll} forces crafting even when stock exists (the "make N of X" case). */
+    public record Request(ItemStack stack, int count, @Nullable List<StackRecord> nested, boolean craftAll) {}
+
+    public record Plan(String title, ItemStack target, int count, List<Request> requests, List<Line> lines, List<Step> steps, List<String> notes, long createdMs) {
         public boolean complete() {
             for (Line l : lines) if (!l.covered()) return false;
             return true;
@@ -106,27 +109,88 @@ public final class CraftPlanner {
         active = null;
     }
 
-    /** Plan a target and pin it. Returns false (with a chat message) when no recipe is known. */
+    /** Plan "make N of this" and pin it. Returns false (with a chat message) when no recipe is known. */
     public boolean start(Minecraft mc, ItemStack target, int count) {
         if (target.isEmpty() || count <= 0) return false;
-        Plan p = compute(mc, target, count);
-        if (p == null) {
+        if (recipesFor(target.getItem()).isEmpty()) {
             Chat.error("No recipe known for " + target.getHoverName().getString() + ". The recipe book only has what you have unlocked"
                     + (sources.size() > 1 ? "." : "; the JEI add-on can supply the rest."));
             return false;
         }
+        Plan p = compute(mc, "Craft " + count + " × " + target.getHoverName().getString(), target, List.of(new Request(target.copy(), count, null, true)));
         active = p;
-        Chat.info("Crafting " + count + " × " + target.getHoverName().getString() + ": " + p.lines().size() + " ingredient(s), " + p.steps().size() + " craft step(s)"
+        Chat.info(p.title() + ": " + p.lines().size() + " ingredient(s), " + p.steps().size() + " craft step(s)"
                 + (p.missingLines() > 0 ? ", " + p.missingLines() + " missing" : p.gathered() ? ", everything is in your inventory" : ", gather from the warehouse with /warehouse craft route") + ".");
         return true;
+    }
+
+    /** Plan whatever a list of requests needs (stock is used first unless a request says craftAll). */
+    public void start(Minecraft mc, String title, ItemStack icon, List<Request> requests) {
+        if (requests.isEmpty()) return;
+        active = compute(mc, title, icon, requests);
+        Chat.info(active.title() + ": " + active.lines().size() + " item(s) to obtain, " + active.steps().size() + " craft step(s)"
+                + (active.missingLines() > 0 ? ", " + active.missingLines() + " missing" : active.gathered() ? ", everything is in your inventory" : "") + ".");
+    }
+
+    /**
+     * Plan what it takes to fill a chest the way it is stocked now: every item it holds is topped up to full stacks in the
+     * slots it occupies (empty slots go to the item with the most slots), and shulker boxes are rebuilt with their contents.
+     */
+    public void startRefill(Minecraft mc, ContainerEntry chest) {
+        Map<String, int[]> slots = new LinkedHashMap<>();   // signature -> {slots, count}
+        Map<String, StackRecord> sample = new LinkedHashMap<>();
+        int empty = chest.slotCount > 0 ? chest.slotCount : 27;
+        for (StackRecord r : chest.contents) {
+            String sig = r.key.asString() + (r.nested != null && !r.nested.isEmpty() ? "#" + nestedSignature(r.nested) : "");
+            int[] a = slots.computeIfAbsent(sig, k -> new int[2]);
+            a[0]++;
+            a[1] += r.count;
+            sample.putIfAbsent(sig, r);
+            empty--;
+        }
+        if (slots.isEmpty()) {
+            Chat.error("That chest is empty, so there is nothing to refill it with. Put one of each item in first.");
+            return;
+        }
+        String biggest = null;
+        for (Map.Entry<String, int[]> en : slots.entrySet()) if (biggest == null || en.getValue()[0] > slots.get(biggest)[0]) biggest = en.getKey();
+        List<Request> requests = new ArrayList<>();
+        for (Map.Entry<String, int[]> en : slots.entrySet()) {
+            StackRecord r = sample.get(en.getKey());
+            Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(r.key.itemId)).orElse(null);
+            if (item == null) continue;
+            int max = r.nested != null && !r.nested.isEmpty() ? 1 : new ItemStack(item).getMaxStackSize();
+            int slotCount = en.getValue()[0] + (en.getKey().equals(biggest) ? Math.max(0, empty) : 0);
+            int need = slotCount * max - en.getValue()[1];
+            if (need <= 0) continue;
+            requests.add(new Request(new ItemStack(item), need, r.nested != null && !r.nested.isEmpty() ? perBox(r) : null, false));
+        }
+        if (requests.isEmpty()) {
+            Chat.info(chest.label() + " is already full.");
+            return;
+        }
+        start(mc, "Refill " + chest.label(), new ItemStack(BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(chest.kind == ContainerKind.BARREL ? "minecraft:barrel" : "minecraft:chest")).orElse(net.minecraft.world.item.Items.CHEST)), requests);
+    }
+
+    private static String nestedSignature(List<StackRecord> nested) {
+        Map<String, Integer> m = new java.util.TreeMap<>();
+        for (StackRecord n : nested) m.merge(n.key.asString(), n.count, Integer::sum);
+        return m.toString();
+    }
+
+    /** Contents of one box, for a record that may describe several identical boxes in a slot. */
+    private static List<StackRecord> perBox(StackRecord r) {
+        List<StackRecord> out = new ArrayList<>();
+        int boxes = Math.max(1, r.count);
+        for (StackRecord n : r.nested) out.add(new StackRecord(n.key, Math.max(1, n.count / boxes), n.slot, null, n.displayName));
+        return out;
     }
 
     public void tick(Minecraft mc) {
         if (active == null || mc.player == null) return;
         if (++ticks % 20 != 0 && !dirty) return;
         dirty = false;
-        Plan p = compute(mc, active.target(), active.count());
-        if (p != null) active = p;
+        active = compute(mc, active.title(), active.target(), active.requests());
     }
 
     // ------------------------------------------------------------ planning
@@ -158,17 +222,24 @@ public final class CraftPlanner {
         int need, inv, wh, missing;
     }
 
-    private @Nullable Plan compute(Minecraft mc, ItemStack target, int count) {
-        if (mc.player == null) return null;
-        Item item = target.getItem();
-        List<RecipeOption> options = recipesFor(item);
-        if (options.isEmpty()) return null;
+    private Plan compute(Minecraft mc, String title, ItemStack icon, List<Request> requests) {
         Pools pools = pools(mc);
         Map<Item, Acc> acc = new LinkedHashMap<>();
         List<Step> steps = new ArrayList<>();
         List<String> notes = new ArrayList<>();
         int[] nodes = {0};
-        expand(item, count, 0, new HashSet<>(), true, pools, acc, steps, notes, nodes);
+        for (Request rq : requests) {
+            if (rq.nested() != null && !rq.nested().isEmpty()) {
+                // The container itself, then its contents for every box wanted.
+                expand(rq.stack().getItem(), rq.count(), 0, new HashSet<>(), rq.craftAll(), pools, acc, steps, notes, nodes);
+                for (StackRecord n : rq.nested()) {
+                    Item inner = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.tryParse(n.key.itemId)).orElse(null);
+                    if (inner != null) expand(inner, n.count * rq.count(), 1, new HashSet<>(), false, pools, acc, steps, notes, nodes);
+                }
+            } else {
+                expand(rq.stack().getItem(), rq.count(), 0, new HashSet<>(), rq.craftAll(), pools, acc, steps, notes, nodes);
+            }
+        }
         List<Line> lines = new ArrayList<>();
         for (Map.Entry<Item, Acc> en : acc.entrySet()) {
             Item i = en.getKey();
@@ -184,7 +255,8 @@ public final class CraftPlanner {
             lines.add(new Line(i, new ItemStack(i), new ItemStack(i).getHoverName().getString(), a.need, a.inv, a.wh, a.missing, where, per));
         }
         lines.sort(Comparator.comparingInt((Line l) -> l.missing() > 0 ? 0 : l.satisfiedByInventory() ? 2 : 1).thenComparing(Comparator.comparingInt(Line::need).reversed()));
-        return new Plan(target.copy(), count, lines, steps, notes, System.currentTimeMillis());
+        int count = requests.size() == 1 ? requests.get(0).count() : 0;
+        return new Plan(title, icon.copy(), count, requests, lines, steps, notes, System.currentTimeMillis());
     }
 
     private List<RecipeOption> recipesFor(Item item) {
